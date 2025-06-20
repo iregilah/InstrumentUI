@@ -1,0 +1,8 @@
+[package]
+name = "Instrument_UI"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+tokio = { version = "1", features = ["full"] }    # Tokio runtime for async
+tokio-lxi = "0.2.2"                          # LXI communication crate
