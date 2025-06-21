@@ -1,0 +1,16 @@
+// src/lib.rs
+
+//! A könyvtár‐krate gyökere.
+//! Itt deklaráljuk és publikáljuk az összes almodult, hogy a bináris
+//! (`main.rs`) és egymás között is elérhessék őket.
+
+pub mod utils;
+pub mod lxi;
+pub mod io;
+pub mod commands;
+pub mod repl;
+pub mod cli;
+pub mod prelude;
+
+/// Gyors eléréshez egy mini‑prelude:
+pub use prelude::*;

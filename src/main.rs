@@ -1,27 +1,44 @@
-use tokio_lxi::LxiDevice;
-use std::net::SocketAddr;
+// src/main.rs
+use std::{env, net::SocketAddr};
+use std::error::Error;
+
+use rigol_cli::prelude::*;           // <- a mini‑prelude
+use rigol_cli::{cli, repl};          // a két belső almodul
+
+/// Ha nem kapunk IP‑címet a parancssorban, erre csatlakozunk.
+const DEFAULT_ADDR: &str = "169.254.50.23:5555";
 
 #[tokio::main]
-async fn main() -> Result<(), tokio_lxi::Error> {
-    // Define the LXI instrument address (IP and port).
-    let instrument_ip = "169.254.50.23:5555";
-    let addr: SocketAddr = instrument_ip.parse().expect("Invalid IP:Port format");
+async fn main() -> Result<(), Box<dyn Error>> {
+    /* ---------- argumentum‑feldolgozás -------------------------------- */
+    let args: Vec<String> = env::args().collect();
 
-    // Connect to the oscilloscope using LXI (TCP port 5025).
-    let mut device = LxiDevice::connect(&addr).await?;
-    println!("Connected to oscilloscope at {}.", instrument_ip);
+    // 0.: a bináris neve, 1.: (opcionálisan) IP[:PORT], 2…: parancsok
+    let addr_str = match args.get(1) {
+        // ha van IP‑paraméter → formázzuk :5025‑re, ha nincs port
+        Some(s) if !s.starts_with('-') => {
+            if s.contains(':') { s.clone() } else { format!("{s}:5025") }
+        }
+        // nincs paraméter → alapértelmezett IP
+        _ => DEFAULT_ADDR.to_owned(),
+    };
+    let addr: SocketAddr = addr_str.parse()?;   // hibakezelés a parse‑nál
 
-    // Send the SCPI command to enable Channel 1 (CH1).
-    // SCPI command format from Rigol manual: :CHANnel1:DISPlay ON
-    device.send(":CHAN1:DISP ON").await?;  // Enable CH1 (turn it ON/display)
-    println!("Command sent: CH1 display ON");
+    /* ---------- ➊ „öröklött” minimál funkció -------------------------- */
+    // minden induláskor biztosítjuk, hogy a CH1 látható legyen
+    // (ha ez zavaró, egy --no-init flaggel feltételesen kikapcsolható,
+    //  de most a kérés kizárólag az integrálás volt).
+    send_scpi(&addr, ":CHAN1:DISP ON").await?;
+    println!("(Init) CH1 display → ON  [{addr}]");
 
-    // (Optional) You could verify by querying an identifier or channel status:
-    // device.send(\"*IDN?\").await?;
-    // let idn_response = device.receive().await?;
-    // println!(\"*IDN? response: {}\", idn_response);
+    /* ---------- ➋ CLI kontra REPL ------------------------------------- */
+    if args.len() > 2 {
+        // van extra argumentum → egylövéses parancssori mód
+        cli::run_cli(&addr, &args[2..]).await?;
+    } else {
+        // csak IP (vagy az sem) → interaktív prompt
+        repl::run_repl(&addr).await?;
+    }
 
-    // Drop the device (connection) which will close the TCP connection.
-    // The program will exit, leaving CH1 enabled on the oscilloscope.
     Ok(())
 }
