@@ -15,9 +15,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     // 0.: a bináris neve, 1.: (opcionálisan) IP[:PORT], 2…: parancsok
     let addr_str = match args.get(1) {
-        // ha van IP‑paraméter → formázzuk :5025‑re, ha nincs port
+        // ha van IP‑paraméter → formázzuk :5555‑re, ha nincs port
         Some(s) if !s.starts_with('-') => {
-            if s.contains(':') { s.clone() } else { format!("{s}:5025") }
+            if s.contains(':') { s.clone() } else { format!("{s}:5555") }
         }
         // nincs paraméter → alapértelmezett IP
         _ => DEFAULT_ADDR.to_owned(),
