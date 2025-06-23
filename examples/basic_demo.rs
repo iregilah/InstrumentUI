@@ -28,9 +28,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!(">> CH1 ON   – Nyomvonal visszatér.");
     sleep(Duration::from_secs(1)).await;
 
-    // 3. Vertikális skála 500 mV/div
-    send_scpi(&addr, ":CHAN1:SCAL 0.5").await?;
-    println!(">> CH1 SCALE 0.5 V/div – Y‑skála összeugrik.");
+    // 3. Vertikális skála 500mV/div
+    send_scpi(&addr, ":CHAN1:SCAL 1.5").await?;
+    println!(">> CH1 SCALE 1.5V/div");
     sleep(Duration::from_secs(1)).await;
 
     // 4. Autoscale

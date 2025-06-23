@@ -1,5 +1,7 @@
 //! Gyors AWG‑ellenőrzés – 1 kHz szinusz, majd zaj.
-
+/*
+cargo run --example awg_demo -- --ip 169.254.50.23:5555
+ */
 use rigol_cli::lxi::send_scpi;
 use std::{net::SocketAddr, time::Duration};
 use tokio::time::sleep;

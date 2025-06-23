@@ -1,3 +1,4 @@
+// src/commands/mod.rs
 //! Parancs‑dispatcher: a CLI‑ből ide fut be minden egyes parancssor.
 
 use std::{error::Error, net::SocketAddr};
