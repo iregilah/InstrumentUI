@@ -14,6 +14,8 @@ pub mod logic;
 pub mod awg;
 pub mod acquire;
 pub mod decode;
+pub mod dmm;
+pub mod psu;
 
 pub async fn dispatch(addr: &SocketAddr, cmd: &[String]) -> Result<(), Box<dyn Error>> {
     macro_rules! try_mod {

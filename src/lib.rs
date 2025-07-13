@@ -11,6 +11,7 @@ pub mod commands;
 pub mod repl;
 pub mod cli;
 pub mod prelude;
+pub mod aggregator;
 
 /// Gyors eléréshez egy mini‑prelude:
 pub use prelude::*;
