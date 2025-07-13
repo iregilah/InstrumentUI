@@ -9,7 +9,7 @@ use std::net::IpAddr;
 use std::io::{Read, Write};
 
 // Communication layer trait for low-level interfaces
-trait CommLayer {
+pub trait CommLayer {
     fn name(&self) -> &str;
     fn lsports(&self) -> Result<Vec<String>, Box<dyn Error>>;
     fn configure_port(&mut self, port: &str, settings: &Value) -> Result<(), Box<dyn Error>>;
@@ -30,11 +30,12 @@ pub struct InstrumentInfo {
 }
 
 // Aggregation layer struct managing connected instruments and interfaces
+// Due to tests everything is pub here
 pub struct Aggregator {
-    connected_instruments: HashMap<u32, InstrumentInfo>,
-    next_uuid: u32,
-    comm_layers: Vec<Box<dyn CommLayer>>,
-    config: Value,
+    pub connected_instruments: HashMap<u32, InstrumentInfo>,
+    pub next_uuid: u32,
+    pub comm_layers: Vec<Box<dyn CommLayer>>,
+    pub config: Value,
 }
 
 impl Aggregator {
