@@ -14,7 +14,9 @@ trait CommLayer {
     fn lsports(&self) -> Result<Vec<String>, Box<dyn Error>>;
     fn configure_port(&mut self, port: &str, settings: &Value) -> Result<(), Box<dyn Error>>;
     fn scan(&mut self, port: &str, id_range: Option<&Value>) -> Result<Vec<(String, String, Option<String>, Option<String>, Option<String>)>, Box<dyn Error>>;
+    fn send(&mut self, port: &str, identifier: &str, message: &str) -> Result<Option<String>, Box<dyn Error>>;
 }
+
 
 // Record for a connected instrument in the database
 #[derive(Debug, Clone)]
@@ -332,6 +334,50 @@ impl Aggregator {
         }
         any_removed
     }
+    /// Sends a message to one or multiple instruments specified by UUID(s).
+    pub fn send_to(&mut self, uuids: &[u32], message: &str) -> Vec<(u32, Result<String, Box<dyn Error>>)> {
+        let mut results = Vec::new();
+        for &uuid in uuids {
+            let info = match self.connected_instruments.get(&uuid) {
+                Some(info) => info.clone(),
+                None => {
+                    results.push((uuid, Err(format!("Instrument UUID {} not found", uuid).into())));
+                    continue;
+                }
+            };
+            let iface = match self.comm_layers.iter_mut().find(|iface| iface.name().to_ascii_lowercase().starts_with(&info.interface.to_ascii_lowercase())) {
+                Some(layer) => layer,
+                None => {
+                    results.push((uuid, Err(format!("Interface {} not running", info.interface).into())));
+                    continue;
+                }
+            };
+            match iface.send(&info.port, &info.identifier, message) {
+                Ok(Some(resp)) => results.push((uuid, Ok(resp))),
+                Ok(None) => results.push((uuid, Err("No response received".into()))),
+                Err(e) => results.push((uuid, Err(e))),
+            }
+        }
+        results
+    }
+    /// Sends the message to every connected instrument.
+    pub fn broadcast(&mut self, message: &str) -> Vec<(u32, Result<String, Box<dyn Error>>)> {
+        let ids: Vec<u32> = self.connected_instruments.keys().cloned().collect();
+        self.send_to(&ids, message)
+    }
+    /// Callback for incoming unsolicited data from any instrument.
+    pub fn recvd(&mut self, uuid: u32, data: &[u8]) {
+        if !self.connected_instruments.contains_key(&uuid) {
+            eprintln!("Received data from unknown instrument UUID {}", uuid);
+            return;
+        }
+        if let Ok(text) = std::str::from_utf8(data) {
+            println!("(Unsolicited) [{}]: {}", uuid, text.trim());
+        } else {
+            println!("(Unsolicited) [{}]: {:?}", uuid, data);
+        }
+        // In a full implementation, this would propagate the data to higher layers.
+    }
 }
 
 impl Drop for Aggregator {
@@ -432,6 +478,30 @@ impl CommLayer for LxiComm {
             }
         }
         Ok(found)
+    }
+    fn send(&mut self, _port: &str, identifier: &str, message: &str) -> Result<Option<String>, Box<dyn Error>> {
+        let target = if identifier.contains(':') {
+            identifier.to_string()
+        } else {
+            format!("{}:5555", identifier)
+        };
+        let addr = target.parse()?;
+        let mut stream = std::net::TcpStream::connect_timeout(&addr, std::time::Duration::from_secs(1))?;
+        stream.set_read_timeout(Some(std::time::Duration::from_secs(1)))?;
+        // Ensure message is terminated with newline
+        let mut cmd = message.as_bytes().to_vec();
+        if !cmd.ends_with(&[b'\n']) {
+            cmd.push(b'\n');
+        }
+        stream.write_all(&cmd)?;
+        stream.flush()?;
+        let mut buffer = [0u8; 1024];
+        let n = stream.read(&mut buffer)?;
+        if n > 0 {
+            Ok(Some(String::from_utf8_lossy(&buffer[..n]).trim_end().to_string()))
+        } else {
+            Ok(None)
+        }
     }
 }
 
@@ -546,6 +616,11 @@ impl CommLayer for UsbComm {
             }
         }
         Ok(found)
+    }
+
+    fn send(&mut self, _port: &str, _identifier: &str, _message: &str) -> Result<Option<String>, Box<dyn Error>> {
+        // USB communication not implemented
+        Err("USB communication not implemented".into())
     }
 }
 
@@ -699,6 +774,47 @@ impl CommLayer for SerialComm {
         }
         Ok(found)
     }
+
+    fn send(&mut self, port: &str, _identifier: &str, message: &str) -> Result<Option<String>, Box<dyn Error>> {
+        if !self.open_ports.contains_key(port) {
+            let _ = self.configure_port(port, &json!({}));
+        }
+        let port_handle = self.open_ports.get_mut(port).ok_or_else(|| format!("Port {} not available", port))?;
+        // Clear any pending input
+        let _ = port_handle.clear(serialport::ClearBuffer::Input);
+        // Write the message with CR+LF termination
+        let line = message.trim_end_matches(|c| c == '\r' || c == '\n');
+        let cmd_line = format!("{}\r\n", line);
+        port_handle.write_all(cmd_line.as_bytes())?;
+        port_handle.flush()?;
+        // Read response until newline or timeout
+        let mut response = Vec::new();
+        let start = std::time::Instant::now();
+        let mut buf = [0u8; 256];
+        loop {
+            match port_handle.read(&mut buf) {
+                Ok(n) if n > 0 => {
+                    response.extend_from_slice(&buf[..n]);
+                    if response.contains(&b'\n') || response.contains(&b'\r') {
+                        break;
+                    }
+                }
+                Ok(_) => break,
+                Err(ref e) if e.kind() == std::io::ErrorKind::TimedOut => {
+                    if start.elapsed() > std::time::Duration::from_millis(500) {
+                        break;
+                    }
+                    continue;
+                }
+                Err(e) => return Err(Box::new(e)),
+            }
+        }
+        if !response.is_empty() {
+            Ok(Some(String::from_utf8_lossy(&response).trim_end().to_string()))
+        } else {
+            Ok(None)
+        }
+    }
 }
 
 // GPIB communication layer
@@ -751,5 +867,10 @@ impl CommLayer for GpibComm {
     fn scan(&mut self, _port: &str, _id_range: Option<&Value>) -> Result<Vec<(String, String, Option<String>, Option<String>, Option<String>)>, Box<dyn Error>> {
         // Scanning GPIB devices requires specific controller commands (not implemented)
         Ok(Vec::new())
+    }
+
+    fn send(&mut self, _port: &str, _identifier: &str, _message: &str) -> Result<Option<String>, Box<dyn Error>> {
+        // GPIB communication not implemented
+        Err("GPIB communication not implemented".into())
     }
 }
