@@ -1,4 +1,5 @@
-// examples/record_replay_demo.rs
+
+// examples/decode_uart_demo.rs
 use rigol_cli::aggregator::Aggregator;
 use rigol_cli::lxi::send_scpi;
 use std::time::Duration;
@@ -57,70 +58,54 @@ fn send_scpi_via_usb(vid: u16, pid: u16, scpi: &str) -> Result<Option<String>, B
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut ip_addr = None;
     let mut use_usb = false;
-    let args: Vec<String> = std::env::args().collect();
-    if let Some(i) = args.iter().position(|s| s == "--ip") {
-        if let Some(val) = args.get(i+1) {
-            ip_addr = Some(val.clone());
+    let mut agg = Aggregator::new()?;
+    let devices = agg.discover_all();
+    if let Some((_, info)) = devices.iter().find(|(_, info)| info.instrument_type.as_deref() == Some("Oscilloscope")) {
+        if info.interface.starts_with("USB") {
+            use_usb = true;
+        } else if info.interface.to_ascii_uppercase().contains("LXI") {
+            let ident = &info.identifier;
+            ip_addr = Some(if ident.contains(':') { ident.clone() } else { format!("{}:5555", ident) });
         }
     }
-    if ip_addr.is_none() {
-        let mut agg = Aggregator::new()?;
-        let devices = agg.discover_all();
-        if let Some((_, info)) = devices.iter().find(|(_, info)| info.instrument_type.as_deref() == Some("Oscilloscope")) {
-            if info.interface.starts_with("USB") {
-                use_usb = true;
-            } else if info.interface.to_ascii_uppercase().contains("LXI") {
-                let ident = &info.identifier;
-                ip_addr = Some(if ident.contains(':') { ident.clone() } else { format!("{}:5555", ident) });
-            }
-        }
-        if !use_usb && ip_addr.is_none() {
-            ip_addr = Some("169.254.50.23:5555".to_string());
-        }
+    if !use_usb && ip_addr.is_none() {
+        ip_addr = Some("169.254.50.23:5555".to_string());
     }
 
     if use_usb {
-        println!("=== REC/REPLAY DEMO ===");
-        send_scpi_via_usb(USB_VID, USB_PID, ":ACQ:TYPE NORM")?;
-        send_scpi_via_usb(USB_VID, USB_PID, ":TIM:SCAL 0.002")?;
-
-        send_scpi_via_usb(USB_VID, USB_PID, ":FUNC:WREC:FEND 10")?;
-        send_scpi_via_usb(USB_VID, USB_PID, ":FUNC:WREC:ENAB ON")?;
-        println!(">> RECORD 10 frame – a REC piktogram pirosra vált.");
-        thread::sleep(Duration::from_secs(3));
-
-        send_scpi_via_usb(USB_VID, USB_PID, ":FUNC:WREC:ENAB OFF")?;
-        println!(">> Recording stopt.");
-
-        send_scpi_via_usb(USB_VID, USB_PID, ":FUNC:WREP:MODE REPEAT")?;
-        send_scpi_via_usb(USB_VID, USB_PID, ":FUNC:WREP:OPER PLAY")?;
-        println!(">> PLAY – a képernyőn folyamatosan váltogatódik a 10 frame.");
-        thread::sleep(Duration::from_secs(4));
-
-        send_scpi_via_usb(USB_VID, USB_PID, ":FUNC:WREP:OPER STOP")?;
+        println!("=== UART DECODE DEMO ===");
+        send_scpi_via_usb(USB_VID, USB_PID, ":CHAN1:DISP ON")?;
+        send_scpi_via_usb(USB_VID, USB_PID, ":DEC1:MODE UART")?;
+        send_scpi_via_usb(USB_VID, USB_PID, ":DEC1:DISP ON")?;
+        send_scpi_via_usb(USB_VID, USB_PID, ":DEC1:UART:RX CHAN1")?;
+        send_scpi_via_usb(USB_VID, USB_PID, ":DEC1:UART:TX OFF")?;
+        send_scpi_via_usb(USB_VID, USB_PID, ":DEC1:UART:BAUD 9600")?;
+        send_scpi_via_usb(USB_VID, USB_PID, ":DEC1:UART:WIDT 8")?;
+        send_scpi_via_usb(USB_VID, USB_PID, ":DEC1:UART:PAR NONE")?;
+        send_scpi_via_usb(USB_VID, USB_PID, ":DEC1:UART:STOP 1")?;
+        send_scpi_via_usb(USB_VID, USB_PID, ":DEC1:THRE:CHAN1 1")?;
+        println!(">> Ha soros (UART) forgalom van (9600 8N1), zöld hex‑/ASCII‑buborékok jelennek meg.");
+        thread::sleep(Duration::from_secs(6));
+        send_scpi_via_usb(USB_VID, USB_PID, ":DEC1:DISP OFF")?;
         println!("=== DEMO END ===");
         return Ok(());
     }
 
     let addr = ip_addr.unwrap().parse()?;
-    println!("=== REC/REPLAY DEMO ===");
-    send_scpi(&addr, ":ACQ:TYPE NORM").await?;
-    send_scpi(&addr, ":TIM:SCAL 0.002").await?;
-
-    send_scpi(&addr, ":FUNC:WREC:FEND 10").await?;
-    send_scpi(&addr, ":FUNC:WREC:ENAB ON").await?;
-    println!(">> RECORD 10 frame – a REC piktogram pirosra vált.");
-    sleep(Duration::from_secs(3)).await;
-
-    send_scpi(&addr, ":FUNC:WREC:ENAB OFF").await?;
-    println!(">> Recording stopt.");
-
-    send_scpi(&addr, ":FUNC:WREP:MODE REPEAT").await?;
-    send_scpi(&addr, ":FUNC:WREP:OPER PLAY").await?;
-    println!(">> PLAY – a képernyőn folyamatosan váltogatódik a 10 frame.");
-    sleep(Duration::from_secs(4)).await;
-
-    send_scpi(&addr, ":FUNC:WREP:OPER STOP").await?;
+    println!("=== UART DECODE DEMO ===");
+    send_scpi(&addr, ":CHAN1:DISP ON").await?;
+    send_scpi(&addr, ":DEC1:MODE UART").await?;
+    send_scpi(&addr, ":DEC1:DISP ON").await?;
+    send_scpi(&addr, ":DEC1:UART:RX CHAN1").await?;
+    send_scpi(&addr, ":DEC1:UART:TX OFF").await?;
+    send_scpi(&addr, ":DEC1:UART:BAUD 9600").await?;
+    send_scpi(&addr, ":DEC1:UART:WIDT 8").await?;
+    send_scpi(&addr, ":DEC1:UART:PAR NONE").await?;
+    send_scpi(&addr, ":DEC1:UART:STOP 1").await?;
+    send_scpi(&addr, ":DEC1:THRE:CHAN1 1").await?;
+    println!(">> Ha soros (UART) forgalom van (9600 8N1), zöld hex‑/ASCII‑buborékok jelennek meg.");
+    sleep(Duration::from_secs(6)).await;
+    send_scpi(&addr, ":DEC1:DISP OFF").await?;
     println!("=== DEMO END ===");
     Ok(())
 }

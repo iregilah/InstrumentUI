@@ -10,7 +10,7 @@ use std::io::{Read, Write};
 
 // Communication layer trait for low-level interfaces
 pub trait CommLayer {
-    fn name(&self) -> &str;
+    fn name(&self) -> &str; //TODO legyenek külön enum-ba felvéve a nevek
     fn lsports(&self) -> Result<Vec<String>, Box<dyn Error>>;
     fn configure_port(&mut self, port: &str, settings: &Value) -> Result<(), Box<dyn Error>>;
     fn scan(&mut self, port: &str, id_range: Option<&Value>) -> Result<Vec<(String, String, Option<String>, Option<String>, Option<String>)>, Box<dyn Error>>;
