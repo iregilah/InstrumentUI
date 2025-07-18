@@ -2,38 +2,47 @@ use rigol_cli::aggregator::Aggregator;
 
 fn main() {
     let mut aggr = Aggregator::new().expect("Aggregátor init hibás");
-    // Feltételezzük, hogy a config.json engedélyezi az USB interfészt: `"USB": { "enabled": true }`
+
     println!("USB interfészek: {}", aggr.lsif());
-    // Pl. "USB on Bus 001 Root Hub; USB on Bus 002 Root Hub"
 
-    // USB eszközök felderítése
+    // --- USB‑eszközök felderítése ------------------------------
     aggr.discover_all();
-    let mut usb_devices = Vec::new();
-    for (&uuid, info) in &aggr.connected_instruments {
-        if info.interface.starts_with("USB") {
-            usb_devices.push((uuid, info));
-        }
-    }
-    if usb_devices.is_empty() {
-        println!("Nem található USB-s műszer.");
-    } else {
-        println!("USB-n talált műszerek:");
-        for (uuid, info) in &usb_devices {
-            println!("  UUID {uuid}: {} {} – {} (Azonosító: {})",
-                     info.vendor.clone().unwrap_or_default(),
-                     info.model.clone().unwrap_or_default(),
-                     info.instrument_type.clone().unwrap_or("ismeretlen típus".to_string()),
-                     info.identifier);
-        }
-    }
 
-    // Próbáljunk meg parancsot küldeni az USB eszközöknek (*IDN?).
-    for (uuid, _) in usb_devices {
-        let result = aggr.send_to(&[uuid], "*IDN?");
+    // ➊  Csak a UUID‑ket gyűjtjük ki
+    let usb_uuids: Vec<u32> = aggr
+        .connected_instruments
+        .iter()
+        .filter(|(_, info)| info.interface.starts_with("USB"))
+        .map(|(&uuid, _)| uuid)
+        .collect();
+
+    // ➋  Kiírás – külön blokkban, hogy az immut‑kölcsönzés itt véget érjen
+    {
+        if usb_uuids.is_empty() {
+            println!("Nem található USB‑s műszer.");
+        } else {
+            println!("USB‑n talált műszerek:");
+            for uuid in &usb_uuids {
+                let info = &aggr.connected_instruments[uuid];
+                println!(
+                    "  UUID {}: {} {} – {} (Azonosító: {})",
+                    uuid,
+                    info.vendor.clone().unwrap_or_default(),
+                    info.model.clone().unwrap_or_default(),
+                    info.instrument_type.clone().unwrap_or_else(|| "ismeretlen típus".to_string()),
+                    info.identifier
+                );
+            }
+        }
+    } // <‑‑ az immutábilis kölcsönzés itt lejár
+
+    // ➌  Most már szabadon kérdezhetünk mutábil módon
+    for uuid in &usb_uuids {
+        let result = aggr.send_to(&[*uuid], "*IDN?");
         let (_id, resp) = &result[0];
         match resp {
-            Ok(answer) => println!("Eszköz {uuid} válasza: {}", answer),
-            Err(err) => println!("USB eszköz {uuid} kommunikációs hiba: {}", err),
+            Ok(answer) => println!("Eszköz {} válasza: {}", uuid, answer),
+            Err(err)   => println!("USB eszköz {} kommunikációs hiba: {}", uuid, err),
         }
     }
 

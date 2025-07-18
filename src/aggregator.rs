@@ -734,7 +734,7 @@ impl CommLayer for SerialComm {
         }
         for id in ids {
             let _ = port_handle.clear(serialport::ClearBuffer::Input);
-            let query = b"*IDN?\\r\\n";
+            let query = b"*IDN?\r\n";
             port_handle.write_all(query)?;
             port_handle.flush()?;
             let mut response = Vec::new();
