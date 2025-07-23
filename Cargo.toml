@@ -10,6 +10,11 @@ serde_json = "1.0.140"                          # LXI communication crate
 if-addrs = "0.14.0"
 rusb = "0.9.4"
 serialport = "4.7.2"
+cxx = "1.0.161"
+cxx-qt = "0.7.2"
+cxx-qt-lib = "0.7.2"
+[build-dependencies]
+cxx-qt-build = "0.7.2"
 
 
 [lib]

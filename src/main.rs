@@ -1,4 +1,24 @@
+
+
+
 // src/main.rs
+use cxx_qt_lib::{QGuiApplication, QQmlApplicationEngine, QUrl};
+
+fn main() {
+    // Initialize Qt GUI application and QML engine
+    let mut app = QGuiApplication::new();
+    let mut engine = QQmlApplicationEngine::new();
+    if let Some(engine) = engine.as_mut() {
+        // Load the QML UI from resources
+        engine.load(&QUrl::from("qrc:/main.qml"));
+    }
+    if let Some(app) = app.as_mut() {
+        // Start the Qt event loop
+        app.exec();
+    }
+}
+
+/*// src/main.rs
 use std::{env, net::SocketAddr};
 use std::error::Error;
 
@@ -41,4 +61,4 @@ async fn main() -> Result<(), Box<dyn Error>> {
     }
 
     Ok(())
-}
+}*/
