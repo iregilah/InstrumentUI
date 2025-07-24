@@ -1,19 +1,20 @@
-
-
-
 // src/main.rs
+mod cxxqt_object;  // include the CXX-Qt bridge module
+use rigol_cli::cxxqt_object;
 use cxx_qt_lib::{QGuiApplication, QQmlApplicationEngine, QUrl};
 
 fn main() {
-    // Initialize Qt GUI application and QML engine
+    // Create the Qt application and QML engine:contentReference[oaicite:4]{index=4}
     let mut app = QGuiApplication::new();
     let mut engine = QQmlApplicationEngine::new();
+
+    // Load the QML UI from the resource (qrc) into the engine:contentReference[oaicite:5]{index=5}
     if let Some(engine) = engine.as_mut() {
-        // Load the QML UI from resources
         engine.load(&QUrl::from("qrc:/main.qml"));
     }
+
+    // Start the Qt event loop
     if let Some(app) = app.as_mut() {
-        // Start the Qt event loop
         app.exec();
     }
 }

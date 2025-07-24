@@ -1,26 +1,30 @@
 // qml/main.qml
 import QtQuick 2.15
 import QtQuick.Controls 2.15
-import RigolApp 1.0    // import the module from Rust (qml_uri "RigolApp", version 1.0)
+import QtQuick.Window 2.15
+
+// Import the Rust QML module (matches qml_uri and version from Rust):contentReference[oaicite:12]{index=12}
+import RigolDemo 1.0
 
 Window {
     visible: true
-    width: 400
-    height: 300
-    title: qsTr("Rigol SCPI Demo")
+    width: 640
+    height: 480
+    title: qsTr("Rigol Demo App")
 
-    // Instantiate the Rust backend object
-    Backend {
-        id: backend
+    // Instantiate the Rust QObject (exposed via cxx-qt) in QML
+    Rigol {
+        id: rigolController
     }
 
-    Column {
-        anchors.centerIn: parent
-        spacing: 20
-
+    Rectangle {
+        anchors.fill: parent
+        color: "#ececec"
         Button {
-            text: qsTr("Run Basic Demo")
-            onClicked: backend.run_demo()
+            text: qsTr("Run Demo")
+            anchors.centerIn: parent
+            // On button click, call the Rust invokable method:contentReference[oaicite:13]{index=13}
+            onClicked: rigolController.runDemo()
         }
     }
 }
