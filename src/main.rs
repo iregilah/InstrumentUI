@@ -1,19 +1,17 @@
-mod cxxqt_object;  // include the CXX-Qt bridge module
-
-// Removed: use rigol_cli::cxxqt_object;
+// src/main.rs
 use cxx_qt_lib::{QGuiApplication, QQmlApplicationEngine, QUrl};
 
 fn main() {
-    // Create the Qt application and QML engine
+    // Qt alkalmazás létrehozása
     let mut app = QGuiApplication::new();
     let mut engine = QQmlApplicationEngine::new();
 
-    // Load the QML UI from the resource (qrc) into the engine
+    // QML felület betöltése a resource-ból
     if let Some(engine) = engine.as_mut() {
         engine.load(&QUrl::from("qrc:/main.qml"));
     }
 
-    // Start the Qt event loop
+    // Qt alkalmazás futtatása
     if let Some(app) = app.as_mut() {
         app.exec();
     }

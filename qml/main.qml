@@ -1,29 +1,24 @@
+// qml/main.qml
 import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Window 2.15
 
-// Import the Rust QML module (matches qml_uri and version from Rust)
-import RigolDemo 1.0
+import RigolDemo 1.0    // A Rust-ban definiált QML modul importja:contentReference[oaicite:10]{index=10}
 
 Window {
     visible: true
-    width: 640
-    height: 480
-    title: qsTr("Rigol Demo App")
+    width: 400
+    height: 300
+    title: qsTr("Rigol Demo")
 
-    // Instantiate the Rust QObject (exposed via CXX-Qt) in QML
-    Rigol {
-        id: rigolController
+    // Rust DeviceController objektum a QML-ben
+    DeviceController {
+        id: deviceController
     }
 
-    Rectangle {
-        anchors.fill: parent
-        color: "#ececec"
-        Button {
-            text: qsTr("Run Demo")
-            anchors.centerIn: parent
-            // On button click, call the Rust invokable method
-            onClicked: rigolController.runDemo()
-        }
+    Button {
+        text: qsTr("Run Basic Demo")
+        anchors.centerIn: parent
+        onClicked: deviceController.runDemo()   // gombnyomásra Rust metódus hívása:contentReference[oaicite:11]{index=11}
     }
 }

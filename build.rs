@@ -1,10 +1,10 @@
-// build.rs
+// build.rs – FRISSÍTVE
 use cxx_qt_build::CxxQtBuilder;
 
 fn main() {
     CxxQtBuilder::new()
-        .qt_module("Network")               // Link Qt's Network module (Core/Gui/Qml are linked by default)
-        .file("src/cxxqt_object.rs")        // Generate C++ from the bridge module
-        .qrc("qml/qml.qrc")                // Compile QML resource file
-        .build();
+        .qt_module("Network")      // opcionális, ha kell a QtNetwork
+        .file("src/bridge.rs")     // a #[cxx_qt::bridge] modul
+        .qrc("qml/qml.qrc")        // QML erőforrások
+        .build();                  // <-- csak ez kell, setup_linker NEM
 }
