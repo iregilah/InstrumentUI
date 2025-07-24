@@ -1,17 +1,18 @@
 // src/cxxqt_object.rs
 #[cxx_qt::bridge]
-mod my_object {
-    // Define the QML-exposed QObject (Rigol) in an extern "RustQt" block
+mod qobject {
     extern "RustQt" {
-        #[qobject(qml_uri = "RigolDemo", qml_version = "1.0")]
+        #[qobject]
         type Rigol = super::RigolRust;
-        // Declare the invokable method to be exposed to QML
+
         #[qinvokable]
         fn run_demo(self: &Rigol);
     }
+
+    // (If needed, extern "C++" section for Qt signals/slots can be added here)
 }
 
-// The actual Rust struct backing the QML-exposed QObject
+// Define the Rust side struct for the QObject
 #[derive(Default)]
 pub struct RigolRust;
 
