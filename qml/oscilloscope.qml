@@ -1,26 +1,29 @@
 // qml/oscilloscope.qml
-import QtQuick 2.12
-import QtQuick.Controls 2.12
-import QtQuick.Layouts 1.12
-import QtQuick.Window 2.12
-import com.kdab.cxx_qt.demo 1.0
+
+import QtQuick 2.15
+import QtQuick.Controls 2.15
+import QtQuick.Layouts 1.15
+import QtQuick.Controls.Material 2.15
+import com.kdab.cxx_qt.scope 1.0
 
 ApplicationWindow {
-    id: oscWindow
     visible: true
-    width: 1000; height: 700
+    width: 1000
+    height: 700
     title: "Oscilloscope"
-    // Instantiate the backend object
+    color: "#1e1e1e"
+    Material.theme: Material.Dark
+
     OscilloscopeBackend {
         id: oscBackend
     }
-    // Layout the UI
+
     ColumnLayout {
         anchors.fill: parent
         spacing: 8
-        // Top toolbar row
+
         RowLayout {
-            spacing: 8; Layout.fillWidth: true
+            spacing: 8
             Button {
                 text: "ℹ"
                 onClicked: oscBackend.infoClicked()
@@ -47,46 +50,55 @@ ApplicationWindow {
             }
             Button {
                 text: "📄"
-                // optional console log view toggle (not implemented)
+                /* optional console log view toggle */
             }
         }
-        // Main content row: scope display and side panels
+
         RowLayout {
-            spacing: 8; Layout.fillWidth: true; Layout.fillHeight: true
+            spacing: 8
+            Layout.fillHeight: true
+
             Rectangle {
-                id: scopeDisplay
-                Layout.preferredWidth: 750
+                Layout.fillWidth: true
                 Layout.fillHeight: true
-                border.color: "#888"; border.width: 1
-                // scope image
+                border.color: "#888"
+                border.width: 1
                 Image {
                     anchors.fill: parent
-                    source: oscBackend.scopeImageData
-                    fillMode: Image.PreserveAspectFit
+                    source: oscBackend.scopeImage
+                    fillMode: Image.Stretch
                 }
-                // center vertical reference line
                 Rectangle {
-                    width: 2;
-                    anchors.top: parent.top; anchors.bottom: parent.bottom
-                    anchors.horizontalCenter: parent.horizontalCenter
+                    width: 2
+                    height: parent.height
+                    x: parent.width / 2 - 1
                     color: "#ccc"
                 }
-                // overlay buttons
                 Button {
-                    text: "🔍"; width: 20; height: 20
-                    anchors.top: parent.top; anchors.right: parent.right
-                    anchors.topMargin: 4; anchors.rightMargin: 4
+                    text: "🔍"
+                    width: 20
+                    height: 20
+                    anchors.top: parent.top
+                    anchors.right: parent.right
+                    anchors.topMargin: 4
+                    anchors.rightMargin: 4
                 }
                 Button {
-                    text: "↔"; width: 20; height: 20
-                    anchors.top: parent.top; anchors.right: parent.right
-                    anchors.topMargin: 4; anchors.rightMargin: 28
+                    text: "↔"
+                    width: 20
+                    height: 20
+                    anchors.top: parent.top
+                    anchors.right: parent.right
+                    anchors.topMargin: 4
+                    anchors.rightMargin: 28
                 }
             }
+
             ColumnLayout {
-                spacing: 8
-                Layout.preferredWidth: 250
+                Layout.preferredWidth: implicitWidth
                 Layout.fillHeight: true
+                spacing: 8
+
                 GroupBox {
                     title: "HORIZ"
                     Layout.fillWidth: true
@@ -97,8 +109,10 @@ ApplicationWindow {
                             Label { text: "F" }
                             Slider {
                                 id: timebaseSlider
-                                from: 1; to: 100; value: 50
-                                onValueChanged: oscBackend.timebaseChanged(value)
+                                from: 1
+                                to: 100
+                                value: 50
+                                onMoved: oscBackend.timebaseChanged(Math.round(value))
                             }
                             Label { text: "Δ" }
                         }
@@ -106,13 +120,16 @@ ApplicationWindow {
                             spacing: 4
                             Label { text: "B" }
                             Slider {
-                                from: -100; to: 100; value: 0
-                                onValueChanged: oscBackend.timeOffsetChanged(value)
+                                from: -100
+                                to: 100
+                                value: 0
+                                onMoved: oscBackend.timeOffsetChanged(Math.round(value))
                             }
                             Label { text: "D" }
                         }
                     }
                 }
+
                 GroupBox {
                     title: "Trigger"
                     Layout.fillWidth: true
@@ -122,99 +139,98 @@ ApplicationWindow {
                             spacing: 4
                             Slider {
                                 id: trigLevelSlider
-                                from: -100; to: 100; value: 0
                                 orientation: Qt.Vertical
-                                Layout.preferredHeight: 100
-                                onValueChanged: oscBackend.triggerLevelChanged(Math.round(value))
+                                from: -100
+                                to: 100
+                                value: 0
+                                Layout.fillHeight: true
+                                onMoved: oscBackend.triggerLevelChanged(Math.round(value))
                             }
                             SpinBox {
-                                from: -100; to: 100
+                                from: -100
+                                to: 100
                                 value: trigLevelSlider.value
-                                onValueChanged: oscBackend.triggerLevelChanged(value)
+                                onEditingFinished: oscBackend.triggerLevelChanged(value)
                             }
                         }
                         RowLayout {
                             spacing: 4
-                            Button {
-                                text: "↑"
-                                onClicked: oscBackend.triggerSlopeUp()
-                            }
-                            Button {
-                                text: "↓"
-                                onClicked: oscBackend.triggerSlopeDown()
-                            }
+                            Button { text: "↑"; onClicked: oscBackend.triggerSlopeUp() }
+                            Button { text: "↓"; onClicked: oscBackend.triggerSlopeDown() }
                         }
                         ComboBox {
+                            id: trigSourceCombo
                             model: ["CH1", "CH2", "CH3", "CH4", "EXT"]
-                            onActivated: oscBackend.triggerSourceSelected(currentText)
+                            currentIndex: 0
+                            onActivated: oscBackend.triggerSourceSelected(text)
                         }
                         RowLayout {
                             spacing: 4
-                            Button {
-                                text: "SINGLE"
-                                onClicked: oscBackend.singleTriggerClicked()
-                            }
-                            Button {
-                                text: "RUN/STOP"
-                                onClicked: oscBackend.runStopClicked()
-                            }
+                            Button { text: "SINGLE"; onClicked: oscBackend.singleTrigger() }
+                            Button { text: "RUN/STOP"; onClicked: oscBackend.runStop() }
                         }
                     }
                 }
             }
         }
-        // Bottom row: channel controls and measurement tabs
+
         RowLayout {
-            spacing: 8; Layout.fillWidth: true
-            // Channel tabs
+            spacing: 8
+
             TabView {
-                id: channelTabs
-                Layout.preferredWidth: 680
-                Layout.fillHeight: true
+                Layout.fillWidth: true
                 Tab {
                     title: "CH1"
-                    ColumnLayout {
+                    Column {
                         spacing: 4
                         Switch {
                             text: "Enable"
-                            onCheckedChanged: oscBackend.ch1EnableChanged(checked)
+                            onToggled: oscBackend.ch1EnableChanged(checked)
                         }
-                        RowLayout {
+                        Row {
                             spacing: 4
                             Label { text: "F" }
                             Slider {
-                                from: 1; to: 100; value: 50
-                                onValueChanged: oscBackend.ch1ScaleChanged(value)
+                                from: 1
+                                to: 100
+                                value: 50
+                                onMoved: oscBackend.ch1ScaleChanged(Math.round(value))
                             }
                             Label { text: "A" }
                         }
-                        RowLayout {
+                        Row {
                             spacing: 4
                             Label { text: "B" }
                             Slider {
-                                from: -100; to: 100; value: 0
-                                onValueChanged: oscBackend.ch1OffsetChanged(value)
+                                from: -100
+                                to: 100
+                                value: 0
+                                onMoved: oscBackend.ch1OffsetChanged(Math.round(value))
                             }
                             Label { text: "D" }
                         }
                         GridLayout {
-                            columns: 2; columnSpacing: 4; rowSpacing: 4
-                            Label { text: "Coupling:"; Layout.column: 0; Layout.row: 0 }
+                            columns: 2
+                            spacing: 4
+                            Label { text: "Coupling:"; Layout.row: 0; Layout.column: 0 }
                             ComboBox {
                                 model: ["DC", "AC", "GND"]
-                                Layout.column: 1; Layout.row: 0
-                                onActivated: oscBackend.ch1CouplingSelected(currentText)
+                                currentIndex: 0
+                                Layout.row: 0; Layout.column: 1
+                                onActivated: oscBackend.ch1CouplingSelected(text)
                             }
-                            Label { text: "Probe:"; Layout.column: 0; Layout.row: 1 }
+                            Label { text: "Probe:"; Layout.row: 1; Layout.column: 0 }
                             ComboBox {
                                 model: ["1×", "10×"]
-                                Layout.column: 1; Layout.row: 1
-                                onActivated: oscBackend.ch1ProbeSelected(currentText)
+                                currentIndex: 0
+                                Layout.row: 1; Layout.column: 1
+                                onActivated: oscBackend.ch1ProbeSelected(text)
                             }
-                            Label { text: "Current:"; Layout.column: 0; Layout.row: 2 }
+                            Label { text: "Current:"; Layout.row: 2; Layout.column: 0 }
                             TextField {
-                                text: "0.00"; readOnly: true
-                                Layout.column: 1; Layout.row: 2
+                                text: "0.00"
+                                readOnly: true
+                                Layout.row: 2; Layout.column: 1
                             }
                         }
                         CheckBox {
@@ -226,175 +242,101 @@ ApplicationWindow {
                 }
                 Tab {
                     title: "CH2"
-                    ColumnLayout {
+                    Column {
                         spacing: 4
-                        Switch {
-                            text: "Enable"
-                            onCheckedChanged: oscBackend.ch2EnableChanged(checked)
-                        }
-                        RowLayout {
+                        Switch { text: "Enable"; onToggled: oscBackend.ch2EnableChanged(checked) }
+                        Row {
                             spacing: 4
                             Label { text: "F" }
-                            Slider {
-                                from: 1; to: 100; value: 50
-                                onValueChanged: oscBackend.ch2ScaleChanged(value)
-                            }
+                            Slider { from: 1; to: 100; value: 50; onMoved: oscBackend.ch2ScaleChanged(Math.round(value)) }
                             Label { text: "A" }
                         }
-                        RowLayout {
+                        Row {
                             spacing: 4
                             Label { text: "B" }
-                            Slider {
-                                from: -100; to: 100; value: 0
-                                onValueChanged: oscBackend.ch2OffsetChanged(value)
-                            }
+                            Slider { from: -100; to: 100; value: 0; onMoved: oscBackend.ch2OffsetChanged(Math.round(value)) }
                             Label { text: "D" }
                         }
                         GridLayout {
-                            columns: 2; columnSpacing: 4; rowSpacing: 4
-                            Label { text: "Coupling:"; Layout.column: 0; Layout.row: 0 }
-                            ComboBox {
-                                model: ["DC", "AC", "GND"]
-                                Layout.column: 1; Layout.row: 0
-                                onActivated: oscBackend.ch2CouplingSelected(currentText)
-                            }
-                            Label { text: "Probe:"; Layout.column: 0; Layout.row: 1 }
-                            ComboBox {
-                                model: ["1×", "10×"]
-                                Layout.column: 1; Layout.row: 1
-                                onActivated: oscBackend.ch2ProbeSelected(currentText)
-                            }
-                            Label { text: "Current:"; Layout.column: 0; Layout.row: 2 }
-                            TextField {
-                                text: "0.00"; readOnly: true
-                                Layout.column: 1; Layout.row: 2
-                            }
+                            columns: 2
+                            spacing: 4
+                            Label { text: "Coupling:"; Layout.row: 0; Layout.column: 0 }
+                            ComboBox { model: ["DC", "AC", "GND"]; currentIndex: 0; Layout.row: 0; Layout.column: 1; onActivated: oscBackend.ch2CouplingSelected(text) }
+                            Label { text: "Probe:"; Layout.row: 1; Layout.column: 0 }
+                            ComboBox { model: ["1×", "10×"]; currentIndex: 0; Layout.row: 1; Layout.column: 1; onActivated: oscBackend.ch2ProbeSelected(text) }
+                            Label { text: "Current:"; Layout.row: 2; Layout.column: 0 }
+                            TextField { text: "0.00"; readOnly: true; Layout.row: 2; Layout.column: 1 }
                         }
-                        CheckBox {
-                            text: "AVG"
-                            checked: oscBackend.avgEnabled
-                            onToggled: oscBackend.averageToggled(checked)
-                        }
+                        CheckBox { text: "AVG"; checked: oscBackend.avgEnabled; onToggled: oscBackend.averageToggled(checked) }
                     }
                 }
                 Tab {
                     title: "CH3"
-                    ColumnLayout {
+                    Column {
                         spacing: 4
-                        Switch {
-                            text: "Enable"
-                            onCheckedChanged: oscBackend.ch3EnableChanged(checked)
-                        }
-                        RowLayout {
+                        Switch { text: "Enable"; onToggled: oscBackend.ch3EnableChanged(checked) }
+                        Row {
                             spacing: 4
                             Label { text: "F" }
-                            Slider {
-                                from: 1; to: 100; value: 50
-                                onValueChanged: oscBackend.ch3ScaleChanged(value)
-                            }
+                            Slider { from: 1; to: 100; value: 50; onMoved: oscBackend.ch3ScaleChanged(Math.round(value)) }
                             Label { text: "A" }
                         }
-                        RowLayout {
+                        Row {
                             spacing: 4
                             Label { text: "B" }
-                            Slider {
-                                from: -100; to: 100; value: 0
-                                onValueChanged: oscBackend.ch3OffsetChanged(value)
-                            }
+                            Slider { from: -100; to: 100; value: 0; onMoved: oscBackend.ch3OffsetChanged(Math.round(value)) }
                             Label { text: "D" }
                         }
                         GridLayout {
-                            columns: 2; columnSpacing: 4; rowSpacing: 4
-                            Label { text: "Coupling:"; Layout.column: 0; Layout.row: 0 }
-                            ComboBox {
-                                model: ["DC", "AC", "GND"]
-                                Layout.column: 1; Layout.row: 0
-                                onActivated: oscBackend.ch3CouplingSelected(currentText)
-                            }
-                            Label { text: "Probe:"; Layout.column: 0; Layout.row: 1 }
-                            ComboBox {
-                                model: ["1×", "10×"]
-                                Layout.column: 1; Layout.row: 1
-                                onActivated: oscBackend.ch3ProbeSelected(currentText)
-                            }
-                            Label { text: "Current:"; Layout.column: 0; Layout.row: 2 }
-                            TextField {
-                                text: "0.00"; readOnly: true
-                                Layout.column: 1; Layout.row: 2
-                            }
+                            columns: 2
+                            spacing: 4
+                            Label { text: "Coupling:"; Layout.row: 0; Layout.column: 0 }
+                            ComboBox { model: ["DC", "AC", "GND"]; currentIndex: 0; Layout.row: 0; Layout.column: 1; onActivated: oscBackend.ch3CouplingSelected(text) }
+                            Label { text: "Probe:"; Layout.row: 1; Layout.column: 0 }
+                            ComboBox { model: ["1×", "10×"]; currentIndex: 0; Layout.row: 1; Layout.column: 1; onActivated: oscBackend.ch3ProbeSelected(text) }
+                            Label { text: "Current:"; Layout.row: 2; Layout.column: 0 }
+                            TextField { text: "0.00"; readOnly: true; Layout.row: 2; Layout.column: 1 }
                         }
-                        CheckBox {
-                            text: "AVG"
-                            checked: oscBackend.avgEnabled
-                            onToggled: oscBackend.averageToggled(checked)
-                        }
+                        CheckBox { text: "AVG"; checked: oscBackend.avgEnabled; onToggled: oscBackend.averageToggled(checked) }
                     }
                 }
                 Tab {
                     title: "CH4"
-                    ColumnLayout {
+                    Column {
                         spacing: 4
-                        Switch {
-                            text: "Enable"
-                            onCheckedChanged: oscBackend.ch4EnableChanged(checked)
-                        }
-                        RowLayout {
+                        Switch { text: "Enable"; onToggled: oscBackend.ch4EnableChanged(checked) }
+                        Row {
                             spacing: 4
                             Label { text: "F" }
-                            Slider {
-                                from: 1; to: 100; value: 50
-                                onValueChanged: oscBackend.ch4ScaleChanged(value)
-                            }
+                            Slider { from: 1; to: 100; value: 50; onMoved: oscBackend.ch4ScaleChanged(Math.round(value)) }
                             Label { text: "A" }
                         }
-                        RowLayout {
+                        Row {
                             spacing: 4
                             Label { text: "B" }
-                            Slider {
-                                from: -100; to: 100; value: 0
-                                onValueChanged: oscBackend.ch4OffsetChanged(value)
-                            }
+                            Slider { from: -100; to: 100; value: 0; onMoved: oscBackend.ch4OffsetChanged(Math.round(value)) }
                             Label { text: "D" }
                         }
                         GridLayout {
-                            columns: 2; columnSpacing: 4; rowSpacing: 4
-                            Label { text: "Coupling:"; Layout.column: 0; Layout.row: 0 }
-                            ComboBox {
-                                model: ["DC", "AC", "GND"]
-                                Layout.column: 1; Layout.row: 0
-                                onActivated: oscBackend.ch4CouplingSelected(currentText)
-                            }
-                            Label { text: "Probe:"; Layout.column: 0; Layout.row: 1 }
-                            ComboBox {
-                                model: ["1×", "10×"]
-                                Layout.column: 1; Layout.row: 1
-                                onActivated: oscBackend.ch4ProbeSelected(currentText)
-                            }
-                            Label { text: "Current:"; Layout.column: 0; Layout.row: 2 }
-                            TextField {
-                                text: "0.00"; readOnly: true
-                                Layout.column: 1; Layout.row: 2
-                            }
+                            columns: 2
+                            spacing: 4
+                            Label { text: "Coupling:"; Layout.row: 0; Layout.column: 0 }
+                            ComboBox { model: ["DC", "AC", "GND"]; currentIndex: 0; Layout.row: 0; Layout.column: 1; onActivated: oscBackend.ch4CouplingSelected(text) }
+                            Label { text: "Probe:"; Layout.row: 1; Layout.column: 0 }
+                            ComboBox { model: ["1×", "10×"]; currentIndex: 0; Layout.row: 1; Layout.column: 1; onActivated: oscBackend.ch4ProbeSelected(text) }
+                            Label { text: "Current:"; Layout.row: 2; Layout.column: 0 }
+                            TextField { text: "0.00"; readOnly: true; Layout.row: 2; Layout.column: 1 }
                         }
-                        CheckBox {
-                            text: "AVG"
-                            checked: oscBackend.avgEnabled
-                            onToggled: oscBackend.averageToggled(checked)
-                        }
+                        CheckBox { text: "AVG"; checked: oscBackend.avgEnabled; onToggled: oscBackend.averageToggled(checked) }
                     }
                 }
             }
-            // Secondary tabs (Measure/Cursor/Math)
+
             TabView {
-                Layout.preferredWidth: 300
-                Layout.fillHeight: true
-                Tab { title: "Measure"; Rectangle { anchors.fill: parent; color: "transparent" } }
-                Tab { title: "Cursor"; Rectangle { anchors.fill: parent; color: "transparent" } }
-                Tab { title: "Math"; Rectangle { anchors.fill: parent; color: "transparent" } }
+                Tab { title: "Measure"; Column { } }
+                Tab { title: "Cursor"; Column { } }
+                Tab { title: "Math"; Column { } }
             }
         }
-    }
-    Component.onCompleted: {
-        oscBackend.initialize();
     }
 }
