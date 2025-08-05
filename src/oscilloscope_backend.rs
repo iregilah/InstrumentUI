@@ -1,11 +1,11 @@
 // src/oscilloscope_backend.rs
 #[cxx_qt::bridge]
 mod ffi {
-    // Import Qt types
     unsafe extern "C++" {
         include!("cxx-qt-lib/qstring.h");
         type QString = cxx_qt_lib::QString;
     }
+
     extern "RustQt" {
         #[qobject]
         #[qml_element]
@@ -13,97 +13,70 @@ mod ffi {
         #[qproperty(QString, scopeImageData)]
         type OscilloscopeBackend = super::OscilloscopeBackendRust;
     }
+
     extern "RustQt" {
-        #[qinvokable]
-        fn info_clicked(&self);
-        #[qinvokable]
-        fn settings_clicked(&self);
-        #[qinvokable]
-        fn autoscale_clicked(&self);
-        #[qinvokable]
-        fn console_clicked(&self);
-        #[qinvokable]
-        fn save_config_clicked(&self);
-        #[qinvokable]
-        fn load_config_clicked(&self);
+        #[qinvokable] fn info_clicked(self: &OscilloscopeBackend);
+        #[qinvokable] fn settings_clicked(self: &OscilloscopeBackend);
+        #[qinvokable] fn autoscale_clicked(self: &OscilloscopeBackend);
+        #[qinvokable] fn console_clicked(self: &OscilloscopeBackend);
+        #[qinvokable] fn save_config_clicked(self: &OscilloscopeBackend);
+        #[qinvokable] fn load_config_clicked(self: &OscilloscopeBackend);
 
-        #[qinvokable]
-        fn trigger_source_selected(&self, source: &QString);
-        #[qinvokable]
-        fn trigger_level_changed(&self, level: i32);
-        #[qinvokable]
-        fn trigger_slope_up(&self);
-        #[qinvokable]
-        fn trigger_slope_down(&self);
-        #[qinvokable]
-        fn single_trigger_clicked(&self);
-        #[qinvokable]
-        fn run_stop_clicked(&self);
+        #[qinvokable] fn trigger_source_selected(self: &OscilloscopeBackend, source: &QString);
+        #[qinvokable] fn trigger_level_changed(self: &OscilloscopeBackend, level: i32);
+        #[qinvokable] fn trigger_slope_up(self: &OscilloscopeBackend);
+        #[qinvokable] fn trigger_slope_down(self: &OscilloscopeBackend);
+        #[qinvokable] fn single_trigger_clicked(self: &OscilloscopeBackend);
+        #[qinvokable] fn run_stop_clicked(self: &OscilloscopeBackend);
 
-        #[qinvokable]
-        fn timebase_changed(&self, value: f64);
-        #[qinvokable]
-        fn time_offset_changed(&self, value: f64);
-        #[qinvokable]
-        fn average_toggled(self: Pin<&mut OscilloscopeBackend>, on: bool);
+        #[qinvokable] fn timebase_changed(self: &OscilloscopeBackend, value: f64);
+        #[qinvokable] fn time_offset_changed(self: &OscilloscopeBackend, value: f64);
+        #[qinvokable] fn average_toggled(self: Pin<&mut OscilloscopeBackend>, on: bool);
 
-        #[qinvokable]
-        fn ch1_enable_changed(&self, on: bool);
-        #[qinvokable]
-        fn ch1_scale_changed(&self, value: f64);
-        #[qinvokable]
-        fn ch1_offset_changed(&self, value: f64);
-        #[qinvokable]
-        fn ch1_coupling_selected(&self, mode: &QString);
-        #[qinvokable]
-        fn ch1_probe_selected(&self, probe: &QString);
+        #[qinvokable] fn ch1_enable_changed(self: &OscilloscopeBackend, on: bool);
+        #[qinvokable] fn ch1_scale_changed(self: &OscilloscopeBackend, value: f64);
+        #[qinvokable] fn ch1_offset_changed(self: &OscilloscopeBackend, value: f64);
+        #[qinvokable] fn ch1_coupling_selected(self: &OscilloscopeBackend, mode: &QString);
+        #[qinvokable] fn ch1_probe_selected(self: &OscilloscopeBackend, probe: &QString);
 
-        #[qinvokable]
-        fn ch2_enable_changed(&self, on: bool);
-        #[qinvokable]
-        fn ch2_scale_changed(&self, value: f64);
-        #[qinvokable]
-        fn ch2_offset_changed(&self, value: f64);
-        #[qinvokable]
-        fn ch2_coupling_selected(&self, mode: &QString);
-        #[qinvokable]
-        fn ch2_probe_selected(&self, probe: &QString);
+        #[qinvokable] fn ch2_enable_changed(self: &OscilloscopeBackend, on: bool);
+        #[qinvokable] fn ch2_scale_changed(self: &OscilloscopeBackend, value: f64);
+        #[qinvokable] fn ch2_offset_changed(self: &OscilloscopeBackend, value: f64);
+        #[qinvokable] fn ch2_coupling_selected(self: &OscilloscopeBackend, mode: &QString);
+        #[qinvokable] fn ch2_probe_selected(self: &OscilloscopeBackend, probe: &QString);
 
-        #[qinvokable]
-        fn ch3_enable_changed(&self, on: bool);
-        #[qinvokable]
-        fn ch3_scale_changed(&self, value: f64);
-        #[qinvokable]
-        fn ch3_offset_changed(&self, value: f64);
-        #[qinvokable]
-        fn ch3_coupling_selected(&self, mode: &QString);
-        #[qinvokable]
-        fn ch3_probe_selected(&self, probe: &QString);
+        #[qinvokable] fn ch3_enable_changed(self: &OscilloscopeBackend, on: bool);
+        #[qinvokable] fn ch3_scale_changed(self: &OscilloscopeBackend, value: f64);
+        #[qinvokable] fn ch3_offset_changed(self: &OscilloscopeBackend, value: f64);
+        #[qinvokable] fn ch3_coupling_selected(self: &OscilloscopeBackend, mode: &QString);
+        #[qinvokable] fn ch3_probe_selected(self: &OscilloscopeBackend, probe: &QString);
 
-        #[qinvokable]
-        fn ch4_enable_changed(&self, on: bool);
-        #[qinvokable]
-        fn ch4_scale_changed(&self, value: f64);
-        #[qinvokable]
-        fn ch4_offset_changed(&self, value: f64);
-        #[qinvokable]
-        fn ch4_coupling_selected(&self, mode: &QString);
-        #[qinvokable]
-        fn ch4_probe_selected(&self, probe: &QString);
+        #[qinvokable] fn ch4_enable_changed(self: &OscilloscopeBackend, on: bool);
+        #[qinvokable] fn ch4_scale_changed(self: &OscilloscopeBackend, value: f64);
+        #[qinvokable] fn ch4_offset_changed(self: &OscilloscopeBackend, value: f64);
+        #[qinvokable] fn ch4_coupling_selected(self: &OscilloscopeBackend, mode: &QString);
+        #[qinvokable] fn ch4_probe_selected(self: &OscilloscopeBackend, probe: &QString);
 
-        #[qinvokable]
-        fn initialize(self: Pin<&mut OscilloscopeBackend>);
+        #[qinvokable] fn initialize(self: Pin<&mut OscilloscopeBackend>);
     }
 }
-use std::net::{SocketAddr, TcpStream};
-use std::io::{Write, Read};
-use std::sync::{Arc, Mutex};
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::thread;
-use std::time::Duration;
-use rigol_cli::utils::parse_source_arg;
+
 use cxx_qt_lib::QString;
+use std::{
+    io::{Read, Write},
+    net::{SocketAddr, TcpStream},
+    pin::Pin,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, Mutex,
+    },
+    thread,
+    time::Duration,
+};
+use rigol_cli::utils::parse_source_arg;
+use image;
 use base64;
+use plotters::prelude::*;
 
 pub struct OscilloscopeBackendRust {
     address: SocketAddr,
@@ -116,12 +89,13 @@ pub struct OscilloscopeBackendRust {
     avg_enabled: bool,
     scope_image_data: QString,
 }
+
 impl Default for OscilloscopeBackendRust {
     fn default() -> Self {
-        OscilloscopeBackendRust {
+        Self {
             address: "169.254.50.23:5555".parse().unwrap(),
-            running: Arc::new(AtomicBool::new(true)), // instrument initial running state
-            current_timebase: Arc::new(Mutex::new(0.5)), // default 0.5 s/div (50% slider)
+            running: Arc::new(AtomicBool::new(true)),
+            current_timebase: Arc::new(Mutex::new(0.5)),
             ch1_on: Arc::new(AtomicBool::new(true)),
             ch2_on: Arc::new(AtomicBool::new(false)),
             ch3_on: Arc::new(AtomicBool::new(false)),

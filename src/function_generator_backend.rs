@@ -5,54 +5,47 @@ mod ffi {
         include!("cxx-qt-lib/qstring.h");
         type QString = cxx_qt_lib::QString;
     }
+
     extern "RustQt" {
         #[qobject]
         #[qml_element]
         type FunctionGeneratorBackend = super::FunctionGeneratorBackendRust;
     }
-    extern "RustQt" {
-        #[qinvokable]
-        fn awg1_enable_changed(&self, on: bool);
-        #[qinvokable]
-        fn awg1_waveform_selected(&self, wave: &QString);
-        #[qinvokable]
-        fn awg1_freq_changed(&self, freq: i32);
-        #[qinvokable]
-        fn awg1_amp_changed(&self, ampl: f64);
-        #[qinvokable]
-        fn awg1_offset_changed(&self, offset: f64);
-        #[qinvokable]
-        fn awg1_load_arb(&self, file_path: &QString);
 
-        #[qinvokable]
-        fn awg2_enable_changed(&self, on: bool);
-        #[qinvokable]
-        fn awg2_waveform_selected(&self, wave: &QString);
-        #[qinvokable]
-        fn awg2_freq_changed(&self, freq: i32);
-        #[qinvokable]
-        fn awg2_amp_changed(&self, ampl: f64);
-        #[qinvokable]
-        fn awg2_offset_changed(&self, offset: f64);
-        #[qinvokable]
-        fn awg2_load_arb(&self, file_path: &QString);
+    extern "RustQt" {
+        #[qinvokable] fn awg1_enable_changed(self: &FunctionGeneratorBackend, on: bool);
+        #[qinvokable] fn awg1_waveform_selected(self: &FunctionGeneratorBackend, wave: &QString);
+        #[qinvokable] fn awg1_freq_changed(self: &FunctionGeneratorBackend, freq: i32);
+        #[qinvokable] fn awg1_amp_changed(self: &FunctionGeneratorBackend, ampl: f64);
+        #[qinvokable] fn awg1_offset_changed(self: &FunctionGeneratorBackend, offset: f64);
+        #[qinvokable] fn awg1_load_arb(self: &FunctionGeneratorBackend, file_path: &QString);
+
+        #[qinvokable] fn awg2_enable_changed(self: &FunctionGeneratorBackend, on: bool);
+        #[qinvokable] fn awg2_waveform_selected(self: &FunctionGeneratorBackend, wave: &QString);
+        #[qinvokable] fn awg2_freq_changed(self: &FunctionGeneratorBackend, freq: i32);
+        #[qinvokable] fn awg2_amp_changed(self: &FunctionGeneratorBackend, ampl: f64);
+        #[qinvokable] fn awg2_offset_changed(self: &FunctionGeneratorBackend, offset: f64);
+        #[qinvokable] fn awg2_load_arb(self: &FunctionGeneratorBackend, file_path: &QString);
     }
 }
-use std::net::{SocketAddr, TcpStream};
-use std::io::Write;
-use std::time::Duration;
-use std::thread;
-use tokio::runtime::Runtime;
+
+use std::{
+    io::Write,
+    net::{SocketAddr, TcpStream},
+    thread,
+    time::Duration,
+};
 use cxx_qt_lib::QString;
+use tokio::runtime::Runtime;
 use rigol_cli;
+
 pub struct FunctionGeneratorBackendRust {
     address: SocketAddr,
 }
+
 impl Default for FunctionGeneratorBackendRust {
     fn default() -> Self {
-        FunctionGeneratorBackendRust {
-            address: "169.254.50.23:5555".parse().unwrap()
-        }
+        Self { address: "169.254.50.23:5555".parse().unwrap() }
     }
 }
 impl ffi::FunctionGeneratorBackend {
