@@ -1,13 +1,14 @@
 // build.rs
-use cxx_qt_build::{CxxQtBuilder, QmlModule};
+use cxx_qt_build::CxxQtBuilder;
+use cxx_qt_build::QmlModule;
 
 fn main() {
     CxxQtBuilder::new()
         .qt_module("Network")
         .qml_module(QmlModule {
-            uri: "com.kdab.cxx_qt.scope",
-            rust_files: &["src/oscilloscope_backend.rs", "src/function_generator_backend.rs"],
-            qml_files: &["qml/oscilloscope.qml", "qml/function_generator.qml"],
+            uri: "com.rigol.scope",
+            rust_files: &["src/osc_controller.rs", "src/awg_controller.rs"],
+            qml_files: &["src/qml/oscilloscope.qml", "src/qml/function_generator.qml"],
             ..Default::default()
         })
         .build();
