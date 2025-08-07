@@ -4,7 +4,6 @@ import QtQuick.Controls 2.12
 import QtQuick.Layouts 1.12
 import QtQuick.Window 2.12
 import InstrumentUI 1.0
-import QtQuick.Controls 1.4
 
 ApplicationWindow {
     id: mainWindow
@@ -22,58 +21,51 @@ ApplicationWindow {
         anchors.fill: parent
         spacing: 8
 
+        /* --------------- felső gombsor --------------- */
         RowLayout {
             spacing: 8
-            Button { text: "ℹ"; onClicked: oscillo.info_clicked() }
-            Button { text: "⚙"; onClicked: oscillo.settings_clicked() }
+            Button { text: "ℹ";   onClicked: oscillo.info_clicked() }
+            Button { text: "⚙";   onClicked: oscillo.settings_clicked() }
             Button { text: "Auto"; onClicked: oscillo.autoscale() }
-            Button { text: ">_"; onClicked: oscillo.console_clicked() }
-            Button { text: "💾"; onClicked: oscillo.save_config() }
-            Button { text: "↑"; onClicked: oscillo.load_config() }
-            Button { text: "📄"; onClicked: oscillo.toggle_console_log() }
+            Button { text: ">_";   onClicked: oscillo.console_clicked() }
+            Button { text: "💾";   onClicked: oscillo.save_config() }
+            Button { text: "↑";    onClicked: oscillo.load_config() }
+            Button { text: "📄";   onClicked: oscillo.toggle_console_log() }
         }
 
+        /* --------------- kép + trigger + timebase --------------- */
         RowLayout {
             spacing: 8
             Layout.fillWidth: true
             Layout.fillHeight: true
 
+            /* scope‑kép */
             Rectangle {
-                Layout.preferredWidth: 600   // 3:1 width ratio approx
+                Layout.preferredWidth: 600
                 Layout.fillHeight: true
                 border.color: "#888"
                 border.width: 1
-                Image {
-                    anchors.fill: parent
-                    source: oscillo.scopeImageUrl
-                }
-                Rectangle {
-                    width: 2
-                    height: parent.height
-                    x: parent.width / 2 - 1
-                    color: "#ccc"
-                }
+
+                Image { anchors.fill: parent; source: oscillo.scopeImageUrl }
+
+                Rectangle { width: 2; height: parent.height; x: parent.width / 2 - 1; color: "#ccc" }
+
                 Button {
                     id: zoomBtn
                     text: "🔍"
-                    width: 20
-                    height: 20
-                    anchors.top: parent.top
-                    anchors.topMargin: 4
-                    anchors.right: parent.right
-                    anchors.rightMargin: 4
+                    width: 20; height: 20
+                    anchors.top: parent.top; anchors.topMargin: 4
+                    anchors.right: parent.right; anchors.rightMargin: 4
                 }
                 Button {
                     text: "↔"
-                    width: 20
-                    height: 20
-                    anchors.top: parent.top
-                    anchors.topMargin: 4
-                    anchors.right: zoomBtn.left
-                    anchors.rightMargin: 4
+                    width: 20; height: 20
+                    anchors.top: parent.top; anchors.topMargin: 4
+                    anchors.right: zoomBtn.left; anchors.rightMargin: 4
                 }
             }
 
+            /* timebase + trigger oszlop */
             ColumnLayout {
                 spacing: 8
                 Layout.fillHeight: true
@@ -114,9 +106,9 @@ ApplicationWindow {
                                 orientation: Qt.Vertical
                                 from: -100; to: 100; value: 0
                                 onValueChanged: {
-                                    let val = Math.round(value);
-                                    if (spinLevel.value !== val) spinLevel.value = val;
-                                    oscillo.trigger_level_changed(val);
+                                    let v = Math.round(value)
+                                    if (spinLevel.value !== v) spinLevel.value = v
+                                    oscillo.trigger_level_changed(v)
                                 }
                             }
                             SpinBox {
@@ -125,8 +117,8 @@ ApplicationWindow {
                                 maximumValue: 100
                                 value: 0
                                 onValueChanged: {
-                                    if (trigSlider.value !== value) trigSlider.value = value;
-                                    oscillo.trigger_level_changed(value);
+                                    if (trigSlider.value !== value) trigSlider.value = value
+                                    oscillo.trigger_level_changed(value)
                                 }
                             }
                         }
@@ -137,12 +129,12 @@ ApplicationWindow {
                         }
                         ComboBox {
                             id: trigSourceBox
-                            model: ["CH1", "CH2", "CH3", "CH4", "EXT"]
+                            model: ["CH1","CH2","CH3","CH4","EXT"]
                             onActivated: oscillo.trigger_source_selected(model[index])
                         }
                         RowLayout {
                             spacing: 4
-                            Button { text: qsTr("SINGLE"); onClicked: oscillo.single_trigger() }
+                            Button { text: qsTr("SINGLE");   onClicked: oscillo.single_trigger() }
                             Button { text: qsTr("RUN/STOP"); onClicked: oscillo.run_stop() }
                         }
                     }
@@ -150,16 +142,35 @@ ApplicationWindow {
             }
         }
 
+        /* --------------- alsó tab‑panelek --------------- */
         RowLayout {
             spacing: 8
 
-            TabView {
+            /* CH1‑4 panelek */
+            ColumnLayout {
                 Layout.preferredWidth: 200
-                Tab {
-                    title: qsTr("CH1")
+                Layout.alignment: Qt.AlignLeft | Qt.AlignTop
+                spacing: 0
+
+                TabBar {
+                    id: channelTabBar
+                    Layout.fillWidth: true
+                    TabButton { text: qsTr("CH1") }
+                    TabButton { text: qsTr("CH2") }
+                    TabButton { text: qsTr("CH3") }
+                    TabButton { text: qsTr("CH4") }
+                }
+
+                StackLayout {
+                    id: channelStack
+                    Layout.fillWidth: true
+                    currentIndex: channelTabBar.currentIndex
+
+                    /* ---------- CH1 ---------- */
                     ColumnLayout {
                         spacing: 4
                         Switch { text: qsTr("Enable"); onToggled: oscillo.ch1_enable_changed(checked) }
+
                         RowLayout {
                             spacing: 4
                             Label { text: qsTr("F") }
@@ -172,36 +183,41 @@ ApplicationWindow {
                             Slider { from: -100; to: 100; value: 0; onValueChanged: oscillo.ch1_offset_changed(value) }
                             Label { text: qsTr("D") }
                         }
+
                         GridLayout {
                             columns: 2
                             columnSpacing: 4; rowSpacing: 4
-                            Label { text: qsTr("Coupling:"); GridLayout.column: 0; GridLayout.row: 0 }
+
+                            Label { text: qsTr("Coupling:"); Layout.column: 0; Layout.row: 0 }
                             ComboBox {
-                                model: ["DC", "AC", "GND"]
-                                GridLayout.column: 1; GridLayout.row: 0
+                                model: ["DC","AC","GND"]
+                                Layout.column: 1; Layout.row: 0
                                 onActivated: oscillo.ch1_coupling_selected(model[index])
                             }
-                            Label { text: qsTr("Probe:"); GridLayout.column: 0; GridLayout.row: 1 }
+
+                            Label { text: qsTr("Probe:");    Layout.column: 0; Layout.row: 1 }
                             ComboBox {
-                                model: ["1×", "10×"]
-                                GridLayout.column: 1; GridLayout.row: 1
+                                model: ["1×","10×"]
+                                Layout.column: 1; Layout.row: 1
                                 onActivated: oscillo.ch1_probe_selected(model[index])
                             }
-                            Label { text: qsTr("Current:"); GridLayout.column: 0; GridLayout.row: 2 }
-                            TextField { text: "0.00"; readOnly: true; GridLayout.column: 1; GridLayout.row: 2 }
+
+                            Label { text: qsTr("Current:");  Layout.column: 0; Layout.row: 2 }
+                            TextField { text: "0.00"; readOnly: true; Layout.column: 1; Layout.row: 2 }
                         }
+
                         CheckBox {
                             text: qsTr("AVG")
                             checked: oscillo.avgEnabled
                             onToggled: oscillo.average_toggled(checked)
                         }
                     }
-                }
-                Tab {
-                    title: qsTr("CH2")
+
+                    /* ---------- CH2 ---------- */
                     ColumnLayout {
                         spacing: 4
                         Switch { text: qsTr("Enable"); onToggled: oscillo.ch2_enable_changed(checked) }
+
                         RowLayout {
                             spacing: 4
                             Label { text: qsTr("F") }
@@ -214,36 +230,41 @@ ApplicationWindow {
                             Slider { from: -100; to: 100; value: 0; onValueChanged: oscillo.ch2_offset_changed(value) }
                             Label { text: qsTr("D") }
                         }
+
                         GridLayout {
                             columns: 2
                             columnSpacing: 4; rowSpacing: 4
-                            Label { text: qsTr("Coupling:"); GridLayout.column: 0; GridLayout.row: 0 }
+
+                            Label { text: qsTr("Coupling:"); Layout.column: 0; Layout.row: 0 }
                             ComboBox {
-                                model: ["DC", "AC", "GND"]
-                                GridLayout.column: 1; GridLayout.row: 0
+                                model: ["DC","AC","GND"]
+                                Layout.column: 1; Layout.row: 0
                                 onActivated: oscillo.ch2_coupling_selected(model[index])
                             }
-                            Label { text: qsTr("Probe:"); GridLayout.column: 0; GridLayout.row: 1 }
+
+                            Label { text: qsTr("Probe:");    Layout.column: 0; Layout.row: 1 }
                             ComboBox {
-                                model: ["1×", "10×"]
-                                GridLayout.column: 1; GridLayout.row: 1
+                                model: ["1×","10×"]
+                                Layout.column: 1; Layout.row: 1
                                 onActivated: oscillo.ch2_probe_selected(model[index])
                             }
-                            Label { text: qsTr("Current:"); GridLayout.column: 0; GridLayout.row: 2 }
-                            TextField { text: "0.00"; readOnly: true; GridLayout.column: 1; GridLayout.row: 2 }
+
+                            Label { text: qsTr("Current:");  Layout.column: 0; Layout.row: 2 }
+                            TextField { text: "0.00"; readOnly: true; Layout.column: 1; Layout.row: 2 }
                         }
+
                         CheckBox {
                             text: qsTr("AVG")
                             checked: oscillo.avgEnabled
                             onToggled: oscillo.average_toggled(checked)
                         }
                     }
-                }
-                Tab {
-                    title: qsTr("CH3")
+
+                    /* ---------- CH3 ---------- */
                     ColumnLayout {
                         spacing: 4
                         Switch { text: qsTr("Enable"); onToggled: oscillo.ch3_enable_changed(checked) }
+
                         RowLayout {
                             spacing: 4
                             Label { text: qsTr("F") }
@@ -256,36 +277,41 @@ ApplicationWindow {
                             Slider { from: -100; to: 100; value: 0; onValueChanged: oscillo.ch3_offset_changed(value) }
                             Label { text: qsTr("D") }
                         }
+
                         GridLayout {
                             columns: 2
                             columnSpacing: 4; rowSpacing: 4
-                            Label { text: qsTr("Coupling:"); GridLayout.column: 0; GridLayout.row: 0 }
+
+                            Label { text: qsTr("Coupling:"); Layout.column: 0; Layout.row: 0 }
                             ComboBox {
-                                model: ["DC", "AC", "GND"]
-                                GridLayout.column: 1; GridLayout.row: 0
+                                model: ["DC","AC","GND"]
+                                Layout.column: 1; Layout.row: 0
                                 onActivated: oscillo.ch3_coupling_selected(model[index])
                             }
-                            Label { text: qsTr("Probe:"); GridLayout.column: 0; GridLayout.row: 1 }
+
+                            Label { text: qsTr("Probe:");    Layout.column: 0; Layout.row: 1 }
                             ComboBox {
-                                model: ["1×", "10×"]
-                                GridLayout.column: 1; GridLayout.row: 1
+                                model: ["1×","10×"]
+                                Layout.column: 1; Layout.row: 1
                                 onActivated: oscillo.ch3_probe_selected(model[index])
                             }
-                            Label { text: qsTr("Current:"); GridLayout.column: 0; GridLayout.row: 2 }
-                            TextField { text: "0.00"; readOnly: true; GridLayout.column: 1; GridLayout.row: 2 }
+
+                            Label { text: qsTr("Current:");  Layout.column: 0; Layout.row: 2 }
+                            TextField { text: "0.00"; readOnly: true; Layout.column: 1; Layout.row: 2 }
                         }
+
                         CheckBox {
                             text: qsTr("AVG")
                             checked: oscillo.avgEnabled
                             onToggled: oscillo.average_toggled(checked)
                         }
                     }
-                }
-                Tab {
-                    title: qsTr("CH4")
+
+                    /* ---------- CH4 ---------- */
                     ColumnLayout {
                         spacing: 4
                         Switch { text: qsTr("Enable"); onToggled: oscillo.ch4_enable_changed(checked) }
+
                         RowLayout {
                             spacing: 4
                             Label { text: qsTr("F") }
@@ -298,24 +324,29 @@ ApplicationWindow {
                             Slider { from: -100; to: 100; value: 0; onValueChanged: oscillo.ch4_offset_changed(value) }
                             Label { text: qsTr("D") }
                         }
+
                         GridLayout {
                             columns: 2
                             columnSpacing: 4; rowSpacing: 4
-                            Label { text: qsTr("Coupling:"); GridLayout.column: 0; GridLayout.row: 0 }
+
+                            Label { text: qsTr("Coupling:"); Layout.column: 0; Layout.row: 0 }
                             ComboBox {
-                                model: ["DC", "AC", "GND"]
-                                GridLayout.column: 1; GridLayout.row: 0
+                                model: ["DC","AC","GND"]
+                                Layout.column: 1; Layout.row: 0
                                 onActivated: oscillo.ch4_coupling_selected(model[index])
                             }
-                            Label { text: qsTr("Probe:"); GridLayout.column: 0; GridLayout.row: 1 }
+
+                            Label { text: qsTr("Probe:");    Layout.column: 0; Layout.row: 1 }
                             ComboBox {
-                                model: ["1×", "10×"]
-                                GridLayout.column: 1; GridLayout.row: 1
+                                model: ["1×","10×"]
+                                Layout.column: 1; Layout.row: 1
                                 onActivated: oscillo.ch4_probe_selected(model[index])
                             }
-                            Label { text: qsTr("Current:"); GridLayout.column: 0; GridLayout.row: 2 }
-                            TextField { text: "0.00"; readOnly: true; GridLayout.column: 1; GridLayout.row: 2 }
+
+                            Label { text: qsTr("Current:");  Layout.column: 0; Layout.row: 2 }
+                            TextField { text: "0.00"; readOnly: true; Layout.column: 1; Layout.row: 2 }
                         }
+
                         CheckBox {
                             text: qsTr("AVG")
                             checked: oscillo.avgEnabled
@@ -325,11 +356,28 @@ ApplicationWindow {
                 }
             }
 
-            TabView {
+            /* Measure / Cursor / Math */
+            ColumnLayout {
                 Layout.preferredWidth: 100
-                Tab { title: qsTr("Measure"); ColumnLayout { } }
-                Tab { title: qsTr("Cursor"); ColumnLayout { } }
-                Tab { title: qsTr("Math"); ColumnLayout { } }
+                Layout.alignment: Qt.AlignLeft | Qt.AlignTop
+                spacing: 0
+
+                TabBar {
+                    id: miscTabBar
+                    Layout.fillWidth: true
+                    TabButton { text: qsTr("Measure") }
+                    TabButton { text: qsTr("Cursor") }
+                    TabButton { text: qsTr("Math") }
+                }
+
+                StackLayout {
+                    id: miscStack
+                    Layout.fillWidth: true
+                    currentIndex: miscTabBar.currentIndex
+                    ColumnLayout { }   /* Measure */
+                    ColumnLayout { }   /* Cursor  */
+                    ColumnLayout { }   /* Math    */
+                }
             }
         }
     }
