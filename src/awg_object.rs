@@ -7,12 +7,16 @@ pub mod awg_qobject {
     }
 
     extern "RustQt" {
-        #[qobject]
-        #[qml_element]
-        #[qproperty(QString, current_wave_ch1, cxx_name = "currentWaveCh1")]
-        #[qproperty(QString, current_wave_ch2, cxx_name = "currentWaveCh2")]
-        type AwgObject = super::AwgObjectRust;
-    }
+                #[qobject]
+                #[qml_element]
+                #[qproperty(QString, current_wave_ch1, cxx_name = "currentWaveCh1")]
+                #[qproperty(QString, current_wave_ch2, cxx_name = "currentWaveCh2")]
+                type AwgObject = super::AwgObjectRust;
+            }
+
+        // --- Threading trait implementáció a qt_thread() metódushoz ---
+        impl cxx_qt::Threading for AwgObject {}
+
 
     extern "RustQt" {
         #[qinvokable] fn awg1_enable_changed(self: &AwgObject, on: bool);

@@ -14,6 +14,7 @@ use cxx_qt_lib::QString;
 use image::{self, ImageFormat};
 use rigol_cli::utils::parse_source_arg;
 
+
 /* ---------- makró a csatorna‑függvényekhez ---------- */
 macro_rules! chan_handlers {
     ($idx:literal,
@@ -46,13 +47,15 @@ pub mod oscillo_qobject {
         type QString = cxx_qt_lib::QString;
     }
 
-    extern "RustQt" {
-        #[qobject]
-        #[qml_element]
-        #[qproperty(bool,    avg_enabled,     cxx_name = "avgEnabled")]
-        #[qproperty(QString, scope_image_url, cxx_name = "scopeImageUrl")]
-        type OscilloObject = super::OscilloObjectRust;
-    }
+        extern "RustQt" {
+            #[qobject]
+            #[qml_element]
+            #[qproperty(bool,    avg_enabled,     cxx_name = "avgEnabled")]
+            #[qproperty(QString, scope_image_url, cxx_name = "scopeImageUrl")]
+            type OscilloObject = super::OscilloObjectRust;
+        }
+        // --- Threading trait implementáció a qt_thread() metódushoz ---
+        impl cxx_qt::Threading for OscilloObject {}
 
     extern "RustQt" {
         /* gombok */
@@ -238,7 +241,7 @@ impl oscillo_qobject::OscilloObject {
 
     /* folyamatos képletöltés */
     pub fn start_capture(self: Pin<&mut Self>) {
-        let qt_thread = self.qt_thread();           // elérhető a Threading trait miatt
+        let qt_thread = self.as_ref().get_ref().qt_thread();          // elérhető a Threading trait miatt
         let addr      = self.rust().addr;
 
         thread::spawn(move || loop {
