@@ -15,6 +15,7 @@ cxx-qt = "0.7.2"
 cxx-qt-lib = { version = "0.7.2", features = ["qt_full"] }
 once_cell = "1.21.3"
 base64 = "0.22.1"
+image = "0.25.6"
 
 
 

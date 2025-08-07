@@ -18,9 +18,9 @@ fn main() {
      *  feloldódjon.  A CxxQtBuilder már felvette az OUT_DIR‑t
      *  a linker keresési útvonalai közé, ezért elég a név.
      * ---------------------------------------------------- */
-            #[cfg(target_env = "msvc")]
-        {
-            // a generált C++ ragasztókód
-            println!("cargo:rustc-link-lib=static=Instrument_UI-cxxqt-generated");
-        }
+    #[cfg(target_env = "msvc")]
+    {
+        println!("cargo:rustc-link-arg=/WHOLEARCHIVE:Instrument_UI-cxxqt-generated.lib");
+    }
+
 }

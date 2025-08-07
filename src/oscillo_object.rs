@@ -2,8 +2,14 @@
 use core::pin::Pin;
 use std::net::SocketAddr;
 use std::io::{Read, Write};
-use cxx_qt_lib::QString;
-
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::thread;
+use std::time::Duration;
+use base64;
+use image;
+use tokio::runtime::Runtime;
+use rigol_cli::utils::parse_source_arg;
+use rigol_cli::{io};
 macro_rules! chan_handlers {
     ($idx:literal,
      $on:ident, $sc:ident, $off:ident,
@@ -138,17 +144,7 @@ pub mod oscillo_qobject {
     }
 }
 
-use core::pin::Pin;
-use std::net::SocketAddr;
-use std::io::{Read, Write};
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::thread;
-use std::time::Duration;
-use base64;
-use image;
-use tokio::runtime::Runtime;
-use rigol_cli::utils::parse_source_arg;
-use rigol_cli::{io};
+
 
 #[derive(Default)]
 pub struct OscilloObjectRust {
