@@ -14,6 +14,7 @@ use cxx_qt_lib::QString;
 use image::{self, ImageFormat};
 use rigol_cli::utils::parse_source_arg;
 
+/* ---------- makró a csatorna‑függvényekhez ---------- */
 macro_rules! chan_handlers {
     ($idx:literal,
      $on:ident, $sc:ident, $off:ident,
@@ -28,7 +29,7 @@ macro_rules! chan_handlers {
         pub fn $sc(&self, val: f64)  { self.send_scpi_sync(&format!(":CHAN{}:SCAL {}", $idx, val)); }
         pub fn $off(&self, val: f64) { self.send_scpi_sync(&format!(":CHAN{}:OFFS {}", $idx, val)); }
         pub fn $coup(&self, mode: &QString) {
-            self.send_scpi_sync(&format!(":CHAN{}:COUP {}", $idx, mode.to_string()));
+            self.send_scpi_sync(&format!(":CHAN{}:COUP {}", $idx, mode));
         }
         pub fn $prob(&self, probe: &QString) {
             let factor = if probe.to_string().starts_with('1') { "1" } else { "10" };
@@ -37,6 +38,7 @@ macro_rules! chan_handlers {
     };
 }
 
+/* ---------- cxx‑qt híd ---------- */
 #[cxx_qt::bridge]
 pub mod oscillo_qobject {
     unsafe extern "C++" {
@@ -53,6 +55,7 @@ pub mod oscillo_qobject {
     }
 
     extern "RustQt" {
+        /* gombok */
         #[qinvokable] fn info_clicked(self: &OscilloObject);
         #[qinvokable] fn settings_clicked(self: &OscilloObject);
         #[qinvokable] fn autoscale(self: &OscilloObject);
@@ -61,6 +64,7 @@ pub mod oscillo_qobject {
         #[qinvokable] fn load_config(self: &OscilloObject);
         #[qinvokable] fn toggle_console_log(self: &OscilloObject);
 
+        /* trigger */
         #[qinvokable] fn trigger_source_selected(self: Pin<&mut OscilloObject>, source: &QString);
         #[qinvokable] fn trigger_level_changed(self: &OscilloObject, level: i32);
         #[qinvokable] fn trigger_slope_up(self: &OscilloObject);
@@ -68,10 +72,12 @@ pub mod oscillo_qobject {
         #[qinvokable] fn single_trigger(self: &OscilloObject);
         #[qinvokable] fn run_stop(self: Pin<&mut OscilloObject>);
 
+        /* időalap / átlag */
         #[qinvokable] fn timebase_changed(self: Pin<&mut OscilloObject>, val: f64);
         #[qinvokable] fn time_offset_changed(self: &OscilloObject, val: f64);
         #[qinvokable] fn average_toggled(self: Pin<&mut OscilloObject>, on: bool);
 
+        /* csatornák */
         #[qinvokable] fn ch1_enable_changed(self: &OscilloObject, on: bool);
         #[qinvokable] fn ch1_scale_changed (self: &OscilloObject, val: f64);
         #[qinvokable] fn ch1_offset_changed(self: &OscilloObject, val: f64);
@@ -96,10 +102,12 @@ pub mod oscillo_qobject {
         #[qinvokable] fn ch4_coupling_selected(self: &OscilloObject, mode: &QString);
         #[qinvokable] fn ch4_probe_selected   (self: &OscilloObject, probe: &QString);
 
+        /* képletöltés */
         #[qinvokable] fn start_capture(self: Pin<&mut OscilloObject>);
     }
 }
 
+/* ---------- belső Rust‑struktúra ---------- */
 pub struct OscilloObjectRust {
     addr:            SocketAddr,
     running:         bool,
@@ -133,11 +141,13 @@ impl OscilloObjectRust {
     }
 }
 
+/* ---------- QObject‑implementáció ---------- */
 impl oscillo_qobject::OscilloObject {
     fn send_scpi_sync(&self, cmd: &str) { self.rust().send_scpi_sync(cmd); }
 
-    /* ---------------- lifecycle ---------------- */
+    /* életciklus */
     pub fn on_construct(self: Pin<&mut Self>) {
+        let mut this = self;                                   // mutábilis binden
         let args: Vec<String> = std::env::args().collect();
         let addr_str = match args.get(1) {
             Some(a) if !a.starts_with('-') => {
@@ -146,20 +156,19 @@ impl oscillo_qobject::OscilloObject {
             _ => "169.254.50.23:5555".into(),
         };
 
-        // módosítások a belső Rust‑struktúrán
         {
-            let mut rust = unsafe { self.as_mut().rust_mut().get_unchecked_mut() };
+            let rust = unsafe { this.as_mut().rust_mut().get_unchecked_mut() };
             rust.addr = addr_str.parse().unwrap();
             rust.running = true;
             rust.trigger_source = "CHANnel1".into();
         }
 
-        self.as_ref().send_scpi_sync(":CHAN1:DISP ON");
-        self.as_ref().send_scpi_sync(":OUTPUT1 OFF");
-        self.as_ref().send_scpi_sync(":OUTPUT2 OFF");
+        this.as_ref().send_scpi_sync(":CHAN1:DISP ON");
+        this.as_ref().send_scpi_sync(":OUTPUT1 OFF");
+        this.as_ref().send_scpi_sync(":OUTPUT2 OFF");
     }
 
-    /* --------------- egyszerű gombok -------------- */
+    /* gomb‑callbackek */
     pub fn info_clicked(&self)      { println!("ℹ info"); }
     pub fn settings_clicked(&self)  { println!("⚙ settings"); }
     pub fn autoscale(&self)         { self.send_scpi_sync(":AUToscale"); }
@@ -168,12 +177,13 @@ impl oscillo_qobject::OscilloObject {
     pub fn load_config(&self)       { println!("↑ load (todo)"); }
     pub fn toggle_console_log(&self){ println!("📄 toggle log"); }
 
-    /* ---------------- trigger --------------------- */
+    /* trigger */
     pub fn trigger_source_selected(self: Pin<&mut Self>, source: &QString) {
+        let mut this = self;
         if let Ok(ch) = parse_source_arg(&source.to_string()) {
-            unsafe { self.as_mut().rust_mut().get_unchecked_mut() }.trigger_source = ch.clone();
-            self.as_ref().send_scpi_sync(":TRIG:MODE EDGE");
-            self.as_ref().send_scpi_sync(&format!(":TRIG:EDGE:SOUR {}", ch));
+            unsafe { this.as_mut().rust_mut().get_unchecked_mut() }.trigger_source = ch.clone();
+            this.as_ref().send_scpi_sync(":TRIG:MODE EDGE");
+            this.as_ref().send_scpi_sync(&format!(":TRIG:EDGE:SOUR {}", ch));
         }
     }
     pub fn trigger_level_changed(&self, level: i32) { self.send_scpi_sync(&format!(":TRIG:EDGE:LEV {}", level)); }
@@ -182,16 +192,18 @@ impl oscillo_qobject::OscilloObject {
     pub fn single_trigger(&self)                    { self.send_scpi_sync(":SING"); }
 
     pub fn run_stop(self: Pin<&mut Self>) {
-        let running_now = !self.rust().running;
-        unsafe { self.as_mut().rust_mut().get_unchecked_mut() }.running = running_now;
-        self.as_ref().send_scpi_sync(if running_now { ":RUN" } else { ":STOP" });
+        let mut this = self;
+        let running_now = !this.rust().running;
+        unsafe { this.as_mut().rust_mut().get_unchecked_mut() }.running = running_now;
+        this.as_ref().send_scpi_sync(if running_now { ":RUN" } else { ":STOP" });
     }
 
-    /* ---------------- timebase -------------------- */
+    /* timebase / offset */
     pub fn timebase_changed(self: Pin<&mut Self>, val: f64) {
+        let mut this = self;
         let scale = val / 100.0;
-        unsafe { self.as_mut().rust_mut().get_unchecked_mut() }.current_timebase = scale;
-        self.as_ref().send_scpi_sync(&format!(":TIM:SCAL {}", scale));
+        unsafe { this.as_mut().rust_mut().get_unchecked_mut() }.current_timebase = scale;
+        this.as_ref().send_scpi_sync(&format!(":TIM:SCAL {}", scale));
     }
     pub fn time_offset_changed(&self, val: f64) {
         let base = self.rust().current_timebase;
@@ -200,16 +212,17 @@ impl oscillo_qobject::OscilloObject {
     }
 
     pub fn average_toggled(self: Pin<&mut Self>, on: bool) {
+        let mut this = self;
         if on {
-            self.as_ref().send_scpi_sync(":ACQ:TYPE AVER");
-            self.as_ref().send_scpi_sync(":ACQ:AVER 16");
+            this.as_ref().send_scpi_sync(":ACQ:TYPE AVER");
+            this.as_ref().send_scpi_sync(":ACQ:AVER 16");
         } else {
-            self.as_ref().send_scpi_sync(":ACQ:TYPE NORM");
+            this.as_ref().send_scpi_sync(":ACQ:TYPE NORM");
         }
-        self.as_mut().set_avg_enabled(on);
+        this.as_mut().set_avg_enabled(on);
     }
 
-    /* ---------------- channels -------------------- */
+    /* csatorna‑makrók */
     chan_handlers!(1,
         ch1_enable_changed, ch1_scale_changed, ch1_offset_changed,
         ch1_coupling_selected, ch1_probe_selected);
@@ -223,9 +236,9 @@ impl oscillo_qobject::OscilloObject {
         ch4_enable_changed, ch4_scale_changed, ch4_offset_changed,
         ch4_coupling_selected, ch4_probe_selected);
 
-    /* ---------------- capture --------------------- */
+    /* folyamatos képletöltés */
     pub fn start_capture(self: Pin<&mut Self>) {
-        let qt_thread = self.as_ref().get_ref().qt_thread();   // &Self -> qt_thread()
+        let qt_thread = self.qt_thread();           // elérhető a Threading trait miatt
         let addr      = self.rust().addr;
 
         thread::spawn(move || loop {

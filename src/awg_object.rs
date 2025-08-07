@@ -39,6 +39,7 @@ use cxx_qt_lib::QString;
 use rigol_cli::{io, send_scpi};
 use tokio::runtime::Runtime;
 
+/* belső Rust‑adat */
 pub struct AwgObjectRust {
     addr: SocketAddr,
     current_wave_ch1: QString,
@@ -57,6 +58,7 @@ impl Default for AwgObjectRust {
 
 impl awg_qobject::AwgObject {
     pub fn on_construct(self: Pin<&mut Self>) {
+        let mut this = self;
         let args: Vec<String> = std::env::args().collect();
         let addr_str = match args.get(1) {
             Some(a) if !a.starts_with('-') => {
@@ -65,10 +67,13 @@ impl awg_qobject::AwgObject {
             _ => "169.254.50.23:5555".into(),
         };
 
-        unsafe { self.as_mut().rust_mut().get_unchecked_mut() }.addr = addr_str.parse().unwrap();
+        {
+            let rust = unsafe { this.as_mut().rust_mut().get_unchecked_mut() };
+            rust.addr = addr_str.parse().unwrap();
+        }
 
-        self.as_mut().set_current_wave_ch1(QString::from("Sine"));
-        self.as_mut().set_current_wave_ch2(QString::from("Sine"));
+        this.as_mut().set_current_wave_ch1(QString::from("Sine"));
+        this.as_mut().set_current_wave_ch2(QString::from("Sine"));
     }
 
     fn send_scpi(&self, cmd: &str) {
@@ -81,18 +86,19 @@ impl awg_qobject::AwgObject {
         }
     }
 
-    /* ---------------- CH1 ---------------- */
+    /* ---------- CH1 ---------- */
     pub fn awg1_enable_changed(&self, on: bool) {
         self.send_scpi(&format!(":OUTPUT1 {}", if on { "ON" } else { "OFF" }));
     }
     pub fn awg1_waveform_selected(self: Pin<&mut Self>, wave: &QString) {
+        let mut this = self;
         let wf = wave.to_string().to_ascii_uppercase();
         let scpi = match wf.as_str() {
             "SINE" => "SIN", "SQUARE" => "SQU", "PULSE" => "PULS",
             "RAMP" => "RAMP", "NOISE" => "NOIS", "ARB" => "USER", o => o,
         };
-        self.as_ref().send_scpi(&format!(":SOUR1:FUNC {}", scpi));
-        self.as_mut().set_current_wave_ch1(QString::from(&wf));
+        this.as_ref().send_scpi(&format!(":SOUR1:FUNC {}", scpi));
+        this.as_mut().set_current_wave_ch1(QString::from(&wf));
     }
     pub fn awg1_freq_changed  (&self, freq: i32) { self.send_scpi(&format!(":SOUR1:FREQ {}", freq)); }
     pub fn awg1_amp_changed   (&self, ampl: f64){ self.send_scpi(&format!(":SOUR1:VOLT {}", ampl)); }
@@ -109,18 +115,19 @@ impl awg_qobject::AwgObject {
         });
     }
 
-    /* ---------------- CH2 ---------------- */
+    /* ---------- CH2 ---------- */
     pub fn awg2_enable_changed(&self, on: bool) {
         self.send_scpi(&format!(":OUTPUT2 {}", if on { "ON" } else { "OFF" }));
     }
     pub fn awg2_waveform_selected(self: Pin<&mut Self>, wave: &QString) {
+        let mut this = self;
         let wf = wave.to_string().to_ascii_uppercase();
         let scpi = match wf.as_str() {
             "SINE" => "SIN", "SQUARE" => "SQU", "PULSE" => "PULS",
             "RAMP" => "RAMP", "NOISE" => "NOIS", "ARB" => "USER", o => o,
         };
-        self.as_ref().send_scpi(&format!(":SOUR2:FUNC {}", scpi));
-        self.as_mut().set_current_wave_ch2(QString::from(&wf));
+        this.as_ref().send_scpi(&format!(":SOUR2:FUNC {}", scpi));
+        this.as_mut().set_current_wave_ch2(QString::from(&wf));
     }
     pub fn awg2_freq_changed  (&self, freq: i32) { self.send_scpi(&format!(":SOUR2:FREQ {}", freq)); }
     pub fn awg2_amp_changed   (&self, ampl: f64){ self.send_scpi(&format!(":SOUR2:VOLT {}", ampl)); }
