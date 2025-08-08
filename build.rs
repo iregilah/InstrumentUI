@@ -1,3 +1,5 @@
+// build.rs
+
 use cxx_qt_build::CxxQtBuilder;
 use cxx_qt_build::QmlModule;
 
