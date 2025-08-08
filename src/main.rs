@@ -1,10 +1,7 @@
 // src/main.rs
 
-mod oscillo_object; // <- a Rust bridge modulok ténylegesen bekerülnek a binárisba
+mod oscillo_object; // a bridge modulok ténylegesen bekerülnek a binárisba
 mod awg_object;
-
-use awg_object::ffi as awg_ffi;
-use oscillo_object::ffi as osc_ffi;
 
 use cxx_qt_lib::{QGuiApplication, QQmlApplicationEngine, QUrl};
 use std::fs;
@@ -26,11 +23,6 @@ fn main() {
         println!("[INIT] Default style 'Material' applied");
     }
 
-    // A típusok kézi regisztrálása: így a Rust oldali szimbólumok biztosan hivatkozva lesznek
-    // (MSVC/OPT:REF mellett sem esnek ki linkeléskor), és QML-ből is elérhetők.
-    println!("[INIT] Registering QML types …");
-    osc_ffi::register_types();
-    awg_ffi::register_types();
 
     let mut app = QGuiApplication::new();
     let mut engine = QQmlApplicationEngine::new();

@@ -305,7 +305,7 @@ impl oscillo_qobject::OscilloObject {
                     let mut png = Vec::new();
                     if img.write_to(&mut std::io::Cursor::new(&mut png), ImageFormat::Png).is_ok() {
                         let url = format!("data:image/png;base64,{}", STANDARD.encode(&png));
-                        qt_thread.queue(move |qobj| {
+                        let _ = qt_thread.queue(move |qobj| {
                             qobj.set_scope_image_url(QString::from(&url));
                         });
                     }
