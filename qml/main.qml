@@ -1,5 +1,6 @@
+// qml/main.qml
+
 import QtQuick 2.12
-import QtQuick.Controls.Material 2.12
 import QtQuick.Controls 2.12
 import QtQuick.Layouts 1.12
 import QtQuick.Window 2.12
@@ -11,8 +12,6 @@ ApplicationWindow {
     height: 700
     title: qsTr("Oscilloscope")
     visible: true
-    Material.theme: Material.Dark
-    Material.accent: "#03DAC6"
 
     OscilloObject {
         id: oscillo
@@ -23,39 +22,46 @@ ApplicationWindow {
         anchors.fill: parent
         spacing: 8
 
-        /* --------------- felső gombsor --------------- */
         RowLayout {
             spacing: 8
             Button {
-                text: "ℹ"; onClicked: oscillo.info_clicked()
+                text: "ℹ"
+                onClicked: oscillo.info_clicked()
             }
             Button {
-                text: "⚙"; onClicked: oscillo.settings_clicked()
+                text: "⚙"
+                onClicked: {
+                    oscillo.settings_clicked()
+                    settingsDialog.open()
+                }
             }
             Button {
-                text: "Auto"; onClicked: oscillo.autoscale()
+                text: "Auto"
+                onClicked: oscillo.autoscale()
             }
             Button {
-                text: ">_"; onClicked: oscillo.console_clicked()
+                text: ">_"
+                onClicked: oscillo.console_clicked()
             }
             Button {
-                text: "💾"; onClicked: oscillo.save_config()
+                text: "💾"
+                onClicked: oscillo.save_config()
             }
             Button {
-                text: "↑"; onClicked: oscillo.load_config()
+                text: "↑"
+                onClicked: oscillo.load_config()
             }
             Button {
-                text: "📄"; onClicked: oscillo.toggle_console_log()
+                text: "📄"
+                onClicked: oscillo.toggle_console_log()
             }
         }
 
-        /* --------------- kép + trigger + timebase --------------- */
         RowLayout {
             spacing: 8
             Layout.fillWidth: true
             Layout.fillHeight: true
 
-            /* scope‑kép */
             Rectangle {
                 Layout.preferredWidth: 600
                 Layout.fillHeight: true
@@ -63,29 +69,38 @@ ApplicationWindow {
                 border.width: 1
 
                 Image {
-                    anchors.fill: parent; source: oscillo.scopeImageUrl
+                    anchors.fill: parent
+                    source: oscillo.scopeImageUrl
                 }
 
                 Rectangle {
-                    width: 2; height: parent.height; x: parent.width / 2 - 1; color: "#ccc"
+                    width: 2
+                    height: parent.height
+                    x: parent.width / 2 - 1
+                    color: "#ccc"
                 }
 
                 Button {
                     id: zoomBtn
                     text: "🔍"
-                    width: 20; height: 20
-                    anchors.top: parent.top; anchors.topMargin: 4
-                    anchors.right: parent.right; anchors.rightMargin: 4
+                    width: 20
+                    height: 20
+                    anchors.top: parent.top
+                    anchors.topMargin: 4
+                    anchors.right: parent.right
+                    anchors.rightMargin: 4
                 }
                 Button {
                     text: "↔"
-                    width: 20; height: 20
-                    anchors.top: parent.top; anchors.topMargin: 4
-                    anchors.right: zoomBtn.left; anchors.rightMargin: 4
+                    width: 20
+                    height: 20
+                    anchors.top: parent.top
+                    anchors.topMargin: 4
+                    anchors.right: zoomBtn.left
+                    anchors.rightMargin: 4
                 }
             }
 
-            /* timebase + trigger oszlop */
             ColumnLayout {
                 spacing: 8
                 Layout.fillHeight: true
@@ -98,7 +113,9 @@ ApplicationWindow {
                             spacing: 4
                             Label { text: qsTr("F") }
                             Slider {
-                                from: 1; to: 100; value: 50
+                                from: 1
+                                to: 100
+                                value: 50
                                 onValueChanged: oscillo.timebase_changed(value)
                             }
                             Label { text: qsTr("Δ") }
@@ -107,7 +124,9 @@ ApplicationWindow {
                             spacing: 4
                             Label { text: qsTr("B") }
                             Slider {
-                                from: -100; to: 100; value: 0
+                                from: -100
+                                to: 100
+                                value: 0
                                 onValueChanged: oscillo.time_offset_changed(value)
                             }
                             Label { text: qsTr("D") }
@@ -124,18 +143,24 @@ ApplicationWindow {
                             Slider {
                                 id: trigSlider
                                 orientation: Qt.Vertical
-                                from: -100; to: 100; value: 0
+                                from: -100
+                                to: 100
+                                value: 0
                                 onValueChanged: {
                                     let v = Math.round(value)
-                                    if (spinLevel.value !== v) spinLevel.value = v
+                                    if (spinLevel.value !== v)
+                                        spinLevel.value = v
                                     oscillo.trigger_level_changed(v)
                                 }
                             }
                             SpinBox {
                                 id: spinLevel
-                                from: -100; to: 100; value: 0
+                                from: -100
+                                to: 100
+                                value: 0
                                 onValueChanged: {
-                                    if (trigSlider.value !== value) trigSlider.value = value
+                                    if (trigSlider.value !== value)
+                                        trigSlider.value = value
                                     oscillo.trigger_level_changed(value)
                                 }
                             }
@@ -160,11 +185,9 @@ ApplicationWindow {
             }
         }
 
-        /* --------------- alsó tab‑panelek --------------- */
         RowLayout {
             spacing: 8
 
-            /* CH1‑4 panelek */
             ColumnLayout {
                 Layout.preferredWidth: 200
                 Layout.alignment: Qt.AlignLeft | Qt.AlignTop
@@ -184,7 +207,6 @@ ApplicationWindow {
                     Layout.fillWidth: true
                     currentIndex: channelTabBar.currentIndex
 
-                    /* ---------- CH1 ---------- */
                     ColumnLayout {
                         spacing: 4
                         Switch { text: qsTr("Enable"); onToggled: oscillo.ch1_enable_changed(checked) }
@@ -201,7 +223,8 @@ ApplicationWindow {
                             Label { text: qsTr("D") }
                         }
                         GridLayout {
-                            columns: 2; columnSpacing: 4; rowSpacing: 4
+                            columns: 2
+                            columnSpacing: 4; rowSpacing: 4
                             Label { text: qsTr("Coupling:"); Layout.column: 0; Layout.row: 0 }
                             ComboBox {
                                 model: ["DC", "AC", "GND"]
@@ -224,7 +247,6 @@ ApplicationWindow {
                         }
                     }
 
-                    /* ---------- CH2 ---------- */
                     ColumnLayout {
                         spacing: 4
                         Switch { text: qsTr("Enable"); onToggled: oscillo.ch2_enable_changed(checked) }
@@ -241,7 +263,8 @@ ApplicationWindow {
                             Label { text: qsTr("D") }
                         }
                         GridLayout {
-                            columns: 2; columnSpacing: 4; rowSpacing: 4
+                            columns: 2
+                            columnSpacing: 4; rowSpacing: 4
                             Label { text: qsTr("Coupling:"); Layout.column: 0; Layout.row: 0 }
                             ComboBox {
                                 model: ["DC", "AC", "GND"]
@@ -264,7 +287,6 @@ ApplicationWindow {
                         }
                     }
 
-                    /* ---------- CH3 ---------- */
                     ColumnLayout {
                         spacing: 4
                         Switch { text: qsTr("Enable"); onToggled: oscillo.ch3_enable_changed(checked) }
@@ -281,7 +303,8 @@ ApplicationWindow {
                             Label { text: qsTr("D") }
                         }
                         GridLayout {
-                            columns: 2; columnSpacing: 4; rowSpacing: 4
+                            columns: 2
+                            columnSpacing: 4; rowSpacing: 4
                             Label { text: qsTr("Coupling:"); Layout.column: 0; Layout.row: 0 }
                             ComboBox {
                                 model: ["DC", "AC", "GND"]
@@ -304,7 +327,6 @@ ApplicationWindow {
                         }
                     }
 
-                    /* ---------- CH4 ---------- */
                     ColumnLayout {
                         spacing: 4
                         Switch { text: qsTr("Enable"); onToggled: oscillo.ch4_enable_changed(checked) }
@@ -321,7 +343,8 @@ ApplicationWindow {
                             Label { text: qsTr("D") }
                         }
                         GridLayout {
-                            columns: 2; columnSpacing: 4; rowSpacing: 4
+                            columns: 2
+                            columnSpacing: 4; rowSpacing: 4
                             Label { text: qsTr("Coupling:"); Layout.column: 0; Layout.row: 0 }
                             ComboBox {
                                 model: ["DC", "AC", "GND"]
@@ -346,7 +369,6 @@ ApplicationWindow {
                 }
             }
 
-            /* Measure / Cursor / Math */
             ColumnLayout {
                 Layout.preferredWidth: 100
                 Layout.alignment: Qt.AlignLeft | Qt.AlignTop
@@ -364,13 +386,85 @@ ApplicationWindow {
                     id: miscStack
                     Layout.fillWidth: true
                     currentIndex: miscTabBar.currentIndex
-                    ColumnLayout { }   /* Measure */
-                    ColumnLayout { }   /* Cursor  */
-                    ColumnLayout { }   /* Math    */
+                    ColumnLayout { }
+                    ColumnLayout { }
+                    ColumnLayout { }
                 }
             }
         }
     }
 
-    Component.onCompleted: oscillo.start_capture()
+    Dialog {
+        id: settingsDialog
+        title: qsTr("Settings")
+        modality: Qt.ApplicationModal
+        visible: false
+        width: 300
+        height: contentItem.implicitHeight + 20
+        ColumnLayout {
+            anchors.fill: parent
+            spacing: 8
+            padding: 8
+            RowLayout {
+                spacing: 4
+                Label { text: qsTr("Theme:") }
+                ComboBox {
+                    id: themeCombo
+                    model: ["Light", "Dark"]
+                    currentIndex: 1
+                    onActivated: {
+                        console.log("Theme changed to " + model[index])
+                        oscillo.setTheme(index === 1)
+                        // Note: Material theme can be applied dynamically if style is Material.
+                        if (styleCombo.currentText === "Material") {
+                            console.log("Material theme selection: " + model[index])
+                        }
+                    }
+                }
+            }
+            RowLayout {
+                spacing: 4
+                Label { text: qsTr("Style:") }
+                ComboBox {
+                    id: styleCombo
+                    model: ["Fusion", "Imagine", "Material"]
+                    currentIndex: 2
+                    onActivated: {
+                        console.log("Style changed to " + model[index])
+                        oscillo.setStyle(model[index])
+                    }
+                }
+            }
+            Button {
+                text: qsTr("Close")
+                Layout.alignment: Qt.AlignRight
+                onClicked: settingsDialog.close()
+            }
+        }
+    }
+
+    Component.onCompleted: {
+        oscillo.start_capture()
+        // Load the AWG (Function Generator) window
+        var comp = Qt.createComponent("qrc:/qt/qml/InstrumentUI/qml/awg.qml")
+        if (comp.status === Component.Ready) {
+            var obj = comp.createObject(null)
+            if (obj !== null) {
+                console.log("AWG window loaded successfully")
+            } else {
+                console.log("Failed to create AWG window")
+            }
+        } else if (comp.status === Component.Error) {
+            console.log("Error loading AWG component: " + comp.errorString())
+        } else {
+            comp.statusChanged.connect(function() {
+                if (comp.status === Component.Ready) {
+                    var obj2 = comp.createObject(null)
+                    console.log("AWG window loaded (delayed), success: " + (obj2 !== null))
+                } else if (comp.status === Component.Error) {
+                    console.log("Error loading AWG component: " + comp.errorString())
+                }
+            })
+        }
+    }
 }
