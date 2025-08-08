@@ -5,6 +5,7 @@ import QtQuick.Controls 2.12
 import QtQuick.Layouts 1.12
 import QtQuick.Window 2.12
 import InstrumentUI 1.0
+import QtQuick.Controls.Material 2.12
 
 Window {
     id: awgWindow
@@ -12,6 +13,8 @@ Window {
     height: 300
     title: qsTr("Function Generator")
     visible: true
+    color: "#1e1e1e"
+    Material.theme: Material.Dark
 
     AwgObject {
         id: awgObject
@@ -37,22 +40,34 @@ Window {
 
         ColumnLayout {
             spacing: 8
-            Switch { text: qsTr("Enable"); onToggled: awgObject.awg1_enable_changed(checked) }
+            Switch {
+                text: qsTr("Enable")
+                onToggled: awgObject.awg1_enable_changed(checked)
+            }
             GridLayout {
                 columns: 2
                 columnSpacing: 4
                 rowSpacing: 4
 
-                Label { text: qsTr("Waveform:"); Layout.column: 0; Layout.row: 0 }
+                Label {
+                    text: qsTr("Waveform:")
+                    Layout.column: 0
+                    Layout.row: 0
+                }
                 ComboBox {
                     id: waveSel1
                     model: ["Sine", "Square", "Pulse", "Ramp", "Noise", "Arb"]
                     currentIndex: 0
-                    Layout.column: 1; Layout.row: 0
+                    Layout.column: 1
+                    Layout.row: 0
                     onActivated: awgObject.awg1_waveform_selected(model[index])
                 }
 
-                Label { text: qsTr("Frequency [Hz]:"); Layout.column: 0; Layout.row: 1 }
+                Label {
+                    text: qsTr("Frequency [Hz]:")
+                    Layout.column: 0
+                    Layout.row: 1
+                }
                 SpinBox {
                     id: freqSpin1
                     value: 1000
@@ -60,34 +75,49 @@ Window {
                     to: 25000000
                     stepSize: 100
                     enabled: awgObject.currentWaveCh1 !== "Noise"
-                    Layout.column: 1; Layout.row: 1
+                    Layout.column: 1
+                    Layout.row: 1
                     onValueChanged: awgObject.awg1_freq_changed(value)
                 }
 
-                Label { text: qsTr("Amplitude [V]:"); Layout.column: 0; Layout.row: 2 }
+                Label {
+                    text: qsTr("Amplitude [V]:")
+                    Layout.column: 0
+                    Layout.row: 2
+                }
                 SpinBox {
                     value: 1.0
                     from: 0.0
                     to: 10.0
                     stepSize: 0.1
-                    Layout.column: 1; Layout.row: 2
+                    Layout.column: 1
+                    Layout.row: 2
                     onValueChanged: awgObject.awg1_amp_changed(value)
                 }
 
-                Label { text: qsTr("Offset [V]:"); Layout.column: 0; Layout.row: 3 }
+                Label {
+                    text: qsTr("Offset [V]:")
+                    Layout.column: 0
+                    Layout.row: 3
+                }
                 SpinBox {
                     value: 0.0
                     from: -5.0
                     to: 5.0
                     stepSize: 0.1
-                    Layout.column: 1; Layout.row: 3
+                    Layout.column: 1
+                    Layout.row: 3
                     onValueChanged: awgObject.awg1_offset_changed(value)
                 }
             }
+
             RowLayout {
                 spacing: 4
                 visible: awgObject.currentWaveCh1 === "Arb"
-                Label { text: qsTr("Arb file:"); verticalAlignment: Text.AlignVCenter }
+                Label {
+                    text: qsTr("Arb file:")
+                    verticalAlignment: Text.AlignVCenter
+                }
                 TextField {
                     id: filePath1
                     placeholderText: qsTr("path/to/waveform.csv")
@@ -102,22 +132,34 @@ Window {
 
         ColumnLayout {
             spacing: 8
-            Switch { text: qsTr("Enable"); onToggled: awgObject.awg2_enable_changed(checked) }
+            Switch {
+                text: qsTr("Enable")
+                onToggled: awgObject.awg2_enable_changed(checked)
+            }
             GridLayout {
                 columns: 2
                 columnSpacing: 4
                 rowSpacing: 4
 
-                Label { text: qsTr("Waveform:"); Layout.column: 0; Layout.row: 0 }
+                Label {
+                    text: qsTr("Waveform:")
+                    Layout.column: 0
+                    Layout.row: 0
+                }
                 ComboBox {
                     id: waveSel2
                     model: ["Sine", "Square", "Pulse", "Ramp", "Noise", "Arb"]
                     currentIndex: 0
-                    Layout.column: 1; Layout.row: 0
+                    Layout.column: 1
+                    Layout.row: 0
                     onActivated: awgObject.awg2_waveform_selected(model[index])
                 }
 
-                Label { text: qsTr("Frequency [Hz]:"); Layout.column: 0; Layout.row: 1 }
+                Label {
+                    text: qsTr("Frequency [Hz]:")
+                    Layout.column: 0
+                    Layout.row: 1
+                }
                 SpinBox {
                     id: freqSpin2
                     value: 1000
@@ -125,34 +167,49 @@ Window {
                     to: 25000000
                     stepSize: 100
                     enabled: awgObject.currentWaveCh2 !== "Noise"
-                    Layout.column: 1; Layout.row: 1
+                    Layout.column: 1
+                    Layout.row: 1
                     onValueChanged: awgObject.awg2_freq_changed(value)
                 }
 
-                Label { text: qsTr("Amplitude [V]:"); Layout.column: 0; Layout.row: 2 }
+                Label {
+                    text: qsTr("Amplitude [V]:")
+                    Layout.column: 0
+                    Layout.row: 2
+                }
                 SpinBox {
                     value: 1.0
                     from: 0.0
                     to: 10.0
                     stepSize: 0.1
-                    Layout.column: 1; Layout.row: 2
+                    Layout.column: 1
+                    Layout.row: 2
                     onValueChanged: awgObject.awg2_amp_changed(value)
                 }
 
-                Label { text: qsTr("Offset [V]:"); Layout.column: 0; Layout.row: 3 }
+                Label {
+                    text: qsTr("Offset [V]:")
+                    Layout.column: 0
+                    Layout.row: 3
+                }
                 SpinBox {
                     value: 0.0
                     from: -5.0
                     to: 5.0
                     stepSize: 0.1
-                    Layout.column: 1; Layout.row: 3
+                    Layout.column: 1
+                    Layout.row: 3
                     onValueChanged: awgObject.awg2_offset_changed(value)
                 }
             }
+
             RowLayout {
                 spacing: 4
                 visible: awgObject.currentWaveCh2 === "Arb"
-                Label { text: qsTr("Arb file:"); verticalAlignment: Text.AlignVCenter }
+                Label {
+                    text: qsTr("Arb file:")
+                    verticalAlignment: Text.AlignVCenter
+                }
                 TextField {
                     id: filePath2
                     placeholderText: qsTr("path/to/waveform.csv")
@@ -164,9 +221,5 @@ Window {
                 }
             }
         }
-    }
-
-    Component.onCompleted: {
-        console.log("AWG window component completed")
     }
 }
