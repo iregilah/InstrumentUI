@@ -1,5 +1,4 @@
 // qml/awg.qml
-
 import QtQuick 2.12
 import QtQuick.Controls 2.12
 import QtQuick.Layouts 1.12
@@ -86,13 +85,25 @@ Window {
                     Layout.row: 2
                 }
                 SpinBox {
-                    value: 1.0
-                    from: 0.0
-                    to: 10.0
-                    stepSize: 0.1
+                    id: ampSpin1
+                    from: 0
+                    to: 100
+                    value: 10
+                    stepSize: 1
                     Layout.column: 1
                     Layout.row: 2
-                    onValueChanged: awgObject.awg1_amp_changed(value)
+                    property int decimals: 1
+                    validator: DoubleValidator {
+                        bottom: Math.min(ampSpin1.from, ampSpin1.to)
+                        top: Math.max(ampSpin1.from, ampSpin1.to)
+                    }
+                    textFromValue: function(value, locale) {
+                        return Number(value / 10).toLocaleString(locale, 'f', ampSpin1.decimals)
+                    }
+                    valueFromText: function(text, locale) {
+                        return Number.fromLocaleString(locale, text) * 10
+                    }
+                    onValueChanged: awgObject.awg1_amp_changed(value / 10.0)
                 }
 
                 Label {
@@ -101,13 +112,25 @@ Window {
                     Layout.row: 3
                 }
                 SpinBox {
-                    value: 0.0
-                    from: -5.0
-                    to: 5.0
-                    stepSize: 0.1
+                    id: offsetSpin1
+                    from: -50
+                    to: 50
+                    value: 0
+                    stepSize: 1
                     Layout.column: 1
                     Layout.row: 3
-                    onValueChanged: awgObject.awg1_offset_changed(value)
+                    property int decimals: 1
+                    validator: DoubleValidator {
+                        bottom: Math.min(offsetSpin1.from, offsetSpin1.to)
+                        top: Math.max(offsetSpin1.from, offsetSpin1.to)
+                    }
+                    textFromValue: function(value, locale) {
+                        return Number(value / 10).toLocaleString(locale, 'f', offsetSpin1.decimals)
+                    }
+                    valueFromText: function(text, locale) {
+                        return Number.fromLocaleString(locale, text) * 10
+                    }
+                    onValueChanged: awgObject.awg1_offset_changed(value / 10.0)
                 }
             }
 
@@ -178,13 +201,25 @@ Window {
                     Layout.row: 2
                 }
                 SpinBox {
-                    value: 1.0
-                    from: 0.0
-                    to: 10.0
-                    stepSize: 0.1
+                    id: ampSpin2
+                    from: 0
+                    to: 100
+                    value: 10
+                    stepSize: 1
                     Layout.column: 1
                     Layout.row: 2
-                    onValueChanged: awgObject.awg2_amp_changed(value)
+                    property int decimals: 1
+                    validator: DoubleValidator {
+                        bottom: Math.min(ampSpin2.from, ampSpin2.to)
+                        top: Math.max(ampSpin2.from, ampSpin2.to)
+                    }
+                    textFromValue: function(value, locale) {
+                        return Number(value / 10).toLocaleString(locale, 'f', ampSpin2.decimals)
+                    }
+                    valueFromText: function(text, locale) {
+                        return Number.fromLocaleString(locale, text) * 10
+                    }
+                    onValueChanged: awgObject.awg2_amp_changed(value / 10.0)
                 }
 
                 Label {
@@ -193,13 +228,25 @@ Window {
                     Layout.row: 3
                 }
                 SpinBox {
-                    value: 0.0
-                    from: -5.0
-                    to: 5.0
-                    stepSize: 0.1
+                    id: offsetSpin2
+                    from: -50
+                    to: 50
+                    value: 0
+                    stepSize: 1
                     Layout.column: 1
                     Layout.row: 3
-                    onValueChanged: awgObject.awg2_offset_changed(value)
+                    property int decimals: 1
+                    validator: DoubleValidator {
+                        bottom: Math.min(offsetSpin2.from, offsetSpin2.to)
+                        top: Math.max(offsetSpin2.from, offsetSpin2.to)
+                    }
+                    textFromValue: function(value, locale) {
+                        return Number(value / 10).toLocaleString(locale, 'f', offsetSpin2.decimals)
+                    }
+                    valueFromText: function(text, locale) {
+                        return Number.fromLocaleString(locale, text) * 10
+                    }
+                    onValueChanged: awgObject.awg2_offset_changed(value / 10.0)
                 }
             }
 

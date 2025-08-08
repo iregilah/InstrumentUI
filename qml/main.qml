@@ -1,5 +1,4 @@
 // qml/main.qml
-
 import QtQuick 2.12
 import QtQuick.Controls 2.12
 import QtQuick.Layouts 1.12
@@ -494,7 +493,6 @@ ApplicationWindow {
         anchors.centerIn: parent
         ColumnLayout {
             spacing: 8
-            padding: 8
 
             Switch {
                 text: qsTr("Dark theme")
