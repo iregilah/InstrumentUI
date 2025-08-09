@@ -31,7 +31,7 @@ fn parse_addr_from_cli() -> SocketAddr {
         }
     }
 
-    "169.254.50.24:5555"
+    "169.254.50.25:5555"
         .parse()
         .expect("hardcoded default addr must parse")
 }

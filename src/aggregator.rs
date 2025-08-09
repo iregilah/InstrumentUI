@@ -1,4 +1,5 @@
 // src/aggregator.rs
+
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::error::Error;
@@ -10,13 +11,12 @@ use std::io::{Read, Write};
 
 // Communication layer trait for low-level interfaces
 pub trait CommLayer {
-    fn name(&self) -> &str; //TODO legyenek külön enum-ba felvéve a nevek
+    fn name(&self) -> &str;
     fn lsports(&self) -> Result<Vec<String>, Box<dyn Error>>;
     fn configure_port(&mut self, port: &str, settings: &Value) -> Result<(), Box<dyn Error>>;
     fn scan(&mut self, port: &str, id_range: Option<&Value>) -> Result<Vec<(String, String, Option<String>, Option<String>, Option<String>)>, Box<dyn Error>>;
     fn send(&mut self, port: &str, identifier: &str, message: &str) -> Result<Option<String>, Box<dyn Error>>;
 }
-
 
 // Record for a connected instrument in the database
 #[derive(Debug, Clone)]
@@ -301,6 +301,7 @@ impl Aggregator {
             false
         }
     }
+
     /// Disconnects an entire port or interface. If `port` is provided, disconnects all instruments on that interface and port.
     /// If `port` is None, disconnects all instruments on the specified interface.
     pub fn disconnect_interface(&mut self, interface: &str, port: Option<&str>) -> bool {
@@ -323,6 +324,7 @@ impl Aggregator {
         }
         any_removed
     }
+
     /// Disconnects from all instruments in the database and removes all records.
     /// Note: nextUUID is not reset to 0.
     pub fn disconnect_all(&mut self) -> bool {
@@ -335,6 +337,7 @@ impl Aggregator {
         }
         any_removed
     }
+
     /// Sends a message to one or multiple instruments specified by UUID(s).
     pub fn send_to(&mut self, uuids: &[u32], message: &str) -> Vec<(u32, Result<String, Box<dyn Error>>)> {
         let mut results = Vec::new();
@@ -355,17 +358,19 @@ impl Aggregator {
             };
             match iface.send(&info.port, &info.identifier, message) {
                 Ok(Some(resp)) => results.push((uuid, Ok(resp))),
-                Ok(None) => results.push((uuid, Err("No response received".into()))),
+                Ok(None) => results.push((uuid, Ok(String::new()))),
                 Err(e) => results.push((uuid, Err(e))),
             }
         }
         results
     }
+
     /// Sends the message to every connected instrument.
     pub fn broadcast(&mut self, message: &str) -> Vec<(u32, Result<String, Box<dyn Error>>)> {
         let ids: Vec<u32> = self.connected_instruments.keys().cloned().collect();
         self.send_to(&ids, message)
     }
+
     /// Callback for incoming unsolicited data from any instrument.
     pub fn recvd(&mut self, uuid: u32, data: &[u8]) {
         if !self.connected_instruments.contains_key(&uuid) {
@@ -405,6 +410,7 @@ impl CommLayer for LxiComm {
     fn name(&self) -> &str {
         "LXI/TCP/MODBUS-TCP"
     }
+
     fn lsports(&self) -> Result<Vec<String>, Box<dyn Error>> {
         let ifaces = get_if_addrs()?;
         let mut nic_names = HashSet::new();
@@ -431,6 +437,7 @@ impl CommLayer for LxiComm {
         ports.sort();
         Ok(ports)
     }
+
     fn configure_port(&mut self, port: &str, settings: &Value) -> Result<(), Box<dyn Error>> {
         // Configure network adapter (e.g., IP settings) if supported - not implemented
         if settings.as_object().map_or(false, |m| !m.is_empty()) {
@@ -438,6 +445,7 @@ impl CommLayer for LxiComm {
         }
         Ok(())
     }
+
     fn scan(&mut self, port: &str, id_range: Option<&Value>) -> Result<Vec<(String, String, Option<String>, Option<String>, Option<String>)>, Box<dyn Error>> {
         let mut found = Vec::new();
         // Collect addresses to scan from id_range
@@ -470,8 +478,20 @@ impl CommLayer for LxiComm {
                             let vendor = parts.get(0).map(|s| s.trim().to_string());
                             let model = parts.get(1).map(|s| s.trim().to_string());
                             let instr_type = if let Some(m) = model.as_ref() {
-                                if m.starts_with("DS") || m.starts_with("MSO") { Some("Oscilloscope".to_string()) } else if m.starts_with("DM") { Some("Multimeter".to_string()) } else if m.starts_with("DP") { Some("Power Supply".to_string()) } else if m.starts_with("DG") { Some("Signal Generator".to_string()) } else { None }
-                            } else { None };
+                                if m.starts_with("DS") || m.starts_with("MSO") {
+                                    Some("Oscilloscope".to_string())
+                                } else if m.starts_with("DM") {
+                                    Some("Multimeter".to_string())
+                                } else if m.starts_with("DP") {
+                                    Some("Power Supply".to_string())
+                                } else if m.starts_with("DG") {
+                                    Some("Signal Generator".to_string())
+                                } else {
+                                    None
+                                }
+                            } else {
+                                None
+                            };
                             found.push((port.to_string(), addr.clone(), vendor, model, instr_type));
                         }
                     }
@@ -480,6 +500,7 @@ impl CommLayer for LxiComm {
         }
         Ok(found)
     }
+
     fn send(&mut self, _port: &str, identifier: &str, message: &str) -> Result<Option<String>, Box<dyn Error>> {
         let target = if identifier.contains(':') {
             identifier.to_string()
@@ -496,6 +517,12 @@ impl CommLayer for LxiComm {
         }
         stream.write_all(&cmd)?;
         stream.flush()?;
+        // Determine if the message is a query (expects a response)
+        let is_query = message.trim_end().ends_with('?');
+        if !is_query {
+            // If not a query, no response is expected. Return success with empty string.
+            return Ok(Some(String::new()));
+        }
         let mut buffer = [0u8; 1024];
         let n = stream.read(&mut buffer)?;
         if n > 0 {
@@ -517,6 +544,7 @@ impl CommLayer for UsbComm {
     fn name(&self) -> &str {
         "USB"
     }
+
     fn lsports(&self) -> Result<Vec<String>, Box<dyn Error>> {
         let devices = rusb::devices()?;
         let mut buses = HashSet::new();
@@ -530,10 +558,12 @@ impl CommLayer for UsbComm {
             .collect();
         Ok(ports)
     }
+
     fn configure_port(&mut self, _port: &str, _settings: &Value) -> Result<(), Box<dyn Error>> {
         // USB ports do not require configuration
         Ok(())
     }
+
     fn scan(&mut self, _port: &str, id_range: Option<&Value>) -> Result<Vec<(String, String, Option<String>, Option<String>, Option<String>)>, Box<dyn Error>> {
         let mut found = Vec::new();
         let devices = rusb::devices()?;
@@ -608,8 +638,20 @@ impl CommLayer for UsbComm {
                     let vendor = if !vendor_str.is_empty() { Some(vendor_str.trim().to_string()) } else { None };
                     let model = if !product_str.is_empty() { Some(product_str.trim().to_string()) } else { None };
                     let instr_type = if let Some(m) = model.as_ref() {
-                        if m.starts_with("DS") || m.starts_with("MSO") { Some("Oscilloscope".to_string()) } else if m.starts_with("DM") || m.contains("Multimeter") { Some("Multimeter".to_string()) } else if m.starts_with("DP") || m.contains("Power") { Some("Power Supply".to_string()) } else if m.starts_with("DG") { Some("Signal Generator".to_string()) } else { None }
-                    } else { None };
+                        if m.starts_with("DS") || m.starts_with("MSO") {
+                            Some("Oscilloscope".to_string())
+                        } else if m.starts_with("DM") || m.contains("Multimeter") {
+                            Some("Multimeter".to_string())
+                        } else if m.starts_with("DP") || m.contains("Power") {
+                            Some("Power Supply".to_string())
+                        } else if m.starts_with("DG") {
+                            Some("Signal Generator".to_string())
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    };
                     let identifier = format!("Bus {:03} Device {:03}", device.bus_number(), device.address());
                     let port_str = format!("Bus {:03}", device.bus_number());
                     found.push((port_str, identifier, vendor, model, instr_type));
@@ -644,6 +686,7 @@ impl CommLayer for SerialComm {
     fn name(&self) -> &str {
         "MODBUS-RTU/RS-485"
     }
+
     fn lsports(&self) -> Result<Vec<String>, Box<dyn Error>> {
         let ports_info = serialport::available_ports()?;
         let mut ports = Vec::new();
@@ -662,6 +705,7 @@ impl CommLayer for SerialComm {
         ports.sort();
         Ok(ports)
     }
+
     fn configure_port(&mut self, port: &str, settings: &Value) -> Result<(), Box<dyn Error>> {
         // If instructed to close the port, close it and return
         if settings.get("close").and_then(|v| v.as_bool()).unwrap_or(false) {
@@ -702,6 +746,7 @@ impl CommLayer for SerialComm {
         self.open_ports.insert(port.to_string(), port_handle);
         Ok(())
     }
+
     fn scan(&mut self, port: &str, id_range: Option<&Value>) -> Result<Vec<(String, String, Option<String>, Option<String>, Option<String>)>, Box<dyn Error>> {
         let mut found = Vec::new();
         // Open port if not already open
@@ -765,8 +810,20 @@ impl CommLayer for SerialComm {
                     let vendor = parts.get(0).map(|s| s.trim().to_string());
                     let model = parts.get(1).map(|s| s.trim().to_string());
                     let instr_type = if let Some(m) = model.as_ref() {
-                        if m.starts_with("DS") || m.starts_with("MSO") { Some("Oscilloscope".to_string()) } else if m.starts_with("DM") { Some("Multimeter".to_string()) } else if m.starts_with("DP") { Some("Power Supply".to_string()) } else if m.starts_with("DG") { Some("Signal Generator".to_string()) } else { None }
-                    } else { None };
+                        if m.starts_with("DS") || m.starts_with("MSO") {
+                            Some("Oscilloscope".to_string())
+                        } else if m.starts_with("DM") {
+                            Some("Multimeter".to_string())
+                        } else if m.starts_with("DP") {
+                            Some("Power Supply".to_string())
+                        } else if m.starts_with("DG") {
+                            Some("Signal Generator".to_string())
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    };
                     let identifier = if id.is_empty() { "".to_string() } else { id.clone() };
                     found.push((port.to_string(), identifier, vendor, model, instr_type));
                     break;
@@ -788,6 +845,12 @@ impl CommLayer for SerialComm {
         let cmd_line = format!("{}\r\n", line);
         port_handle.write_all(cmd_line.as_bytes())?;
         port_handle.flush()?;
+        // Determine if the message is a query (expects a response)
+        let is_query = message.trim_end_matches(|c| c == '\r' || c == '\n').ends_with('?');
+        if !is_query {
+            // If not a query, no response is expected. Return success with empty string.
+            return Ok(Some(String::new()));
+        }
         // Read response until newline or timeout
         let mut response = Vec::new();
         let start = std::time::Instant::now();
@@ -829,6 +892,7 @@ impl CommLayer for GpibComm {
     fn name(&self) -> &str {
         "GPIB"
     }
+
     fn lsports(&self) -> Result<Vec<String>, Box<dyn Error>> {
         let devices = rusb::devices()?;
         let mut ports = Vec::new();
@@ -841,10 +905,14 @@ impl CommLayer for GpibComm {
             if let Ok(handle) = device.open() {
                 let product = if dd.product_id() != 0 {
                     handle.read_product_string_ascii(&dd).unwrap_or_default()
-                } else { String::new() };
+                } else {
+                    String::new()
+                };
                 let manufacturer = if dd.vendor_id() != 0 {
                     handle.read_manufacturer_string_ascii(&dd).unwrap_or_default()
-                } else { String::new() };
+                } else {
+                    String::new()
+                };
                 let mut adapter_name = None;
                 if product.to_ascii_uppercase().contains("GPIB") {
                     adapter_name = Some(product.trim().to_string());
@@ -860,6 +928,7 @@ impl CommLayer for GpibComm {
         ports.sort();
         Ok(ports)
     }
+
     fn configure_port(&mut self, _port: &str, _settings: &Value) -> Result<(), Box<dyn Error>> {
         // No special configuration needed for GPIB interfaces
         Ok(())
