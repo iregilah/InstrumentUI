@@ -8,7 +8,45 @@ use if_addrs::get_if_addrs;
 use serialport::SerialPortType;
 use std::net::IpAddr;
 use std::io::{Read, Write};
-
+use std::sync::{Arc, Mutex};
+use std::thread;
+use std::time::Duration;
+use crate::instrument::Instrument;
+pub fn start_capture_thread(instr: Arc<Mutex<Instrument>>) {
+    println!("Starting capture thread for scope image...");
+    thread::spawn(move || {
+        println!("[AGR] Capture thread started");
+        loop {
+            println!("[AGR] Capture loop iteration begin");
+            {
+                let mut instrument = instr.lock().unwrap();
+                println!("[AGR] Sending DISPlay:DATA? command");
+                if let Err(e) = instrument.write(":DISP:DATA?") {
+                    println!("[AGR] Error sending screenshot command: {}", e);
+                    break;
+                }
+                println!("[AGR] Command sent, reading image data");
+                match instrument.read_block() {
+                    Ok(data) => {
+                        println!("[AGR] {} bytes image data read", data.len());
+                        if let Err(e) = std::fs::write("screenshot.png", &data) {
+                            println!("[AGR] Failed to save image to file: {}", e);
+                        } else {
+                            println!("[AGR] Screenshot saved to screenshot.png");
+                        }
+                    }
+                    Err(e) => {
+                        println!("[AGR] Error reading image data: {}", e);
+                        break;
+                    }
+                }
+            }
+            println!("[AGR] Capture thread sleeping");
+            thread::sleep(Duration::from_secs(1));
+        }
+        println!("[AGR] Capture thread terminating due to error");
+    });
+}
 // Communication layer trait for low-level interfaces
 pub trait CommLayer {
     fn name(&self) -> &str;

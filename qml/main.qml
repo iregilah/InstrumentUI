@@ -524,6 +524,8 @@ ApplicationWindow {
             }
         }
     }
-
-    Component.onCompleted: oscillo.start_capture()
+    Component.onCompleted: {
+        oscillo.init_from_env()
+        oscillo.start_capture()
+    }
 }

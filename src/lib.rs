@@ -12,6 +12,7 @@ pub mod repl;
 pub mod cli;
 pub mod prelude;
 pub mod aggregator;
+pub mod instrument;
 
 /// Gyors eléréshez egy mini‑prelude:
 pub use prelude::*;

@@ -269,4 +269,5 @@ Window {
             }
         }
     }
+    Component.onCompleted: awgObject.init_from_env()
 }
