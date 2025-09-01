@@ -52,7 +52,7 @@ impl instrument_manager_qobject::InstrumentManager {
     pub fn scan(self: Pin<&mut Self>) {
         let mut this = self;
         println!("[UI] Scanning for instruments...");
-        let agg = &mut unsafe { this.as_mut().rust_mut().aggregator };
+        let agg = unsafe { &mut this.as_mut().rust_mut().get_unchecked_mut().aggregator };
         // Reset instrument list before scanning
         agg.connected_instruments.clear();
         agg.next_uuid = 0;
