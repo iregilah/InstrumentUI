@@ -7,27 +7,24 @@ use std::pin::Pin;
 
 #[cxx_qt::bridge]
 pub mod instrument_manager_qobject {
-    // 1) Qt/C++ types belong in an extern "C++" block
+    // Qt/C++ types go here
     unsafe extern "C++" {
         include!("cxx-qt-lib/qstring.h");
         type QString = cxx_qt_lib::QString;
     }
 
-    // 2) RustQt block: QObject, properties, invokables
-    //    auto_cxx_name exports snake_case as camelCase to C++/QML
-    #[auto_cxx_name]
+    // QObject and API
+    #[auto_cxx_name] // optional: snake_case → camelCase for C++/QML
     extern "RustQt" {
         #[qobject]
         #[qml_element]
-        // Property NAME must match the Rust field name
         #[qproperty(QString, instrument_list)]
         type InstrumentManager = super::InstrumentManagerRust;
 
         #[qinvokable]
-        fn scan(self: ::std::pin::Pin<&mut InstrumentManager>);
+        fn scan(self: Pin<&mut InstrumentManager>); // <-- no ::std::pin::
     }
 
-    // (Optional, if you need it) threading marker
     impl cxx_qt::Threading for InstrumentManager {}
 }
 
