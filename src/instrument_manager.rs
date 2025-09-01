@@ -2,6 +2,7 @@
 use cxx_qt::Threading;
 use serde_json::json;
 use crate::aggregator::{Aggregator, InstrumentInfo};
+use cxx_qt::CxxQtType;
 use cxx_qt_lib::QString;
 use std::pin::Pin;
 

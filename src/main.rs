@@ -1,7 +1,8 @@
 mod oscillo_object;
 mod awg_object;
 mod instrument_manager;
-
+mod aggregator;
+mod instrument;
 use cxx_qt_lib::{QGuiApplication, QQmlApplicationEngine, QUrl};
 use std::{
     env, fs,
