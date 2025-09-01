@@ -9,8 +9,8 @@ fn main() {
         .qt_module("QuickControls2")
         .qml_module(QmlModule {
             uri: "InstrumentUI",
-            rust_files: &["src/oscillo_object.rs", "src/awg_object.rs"],
-            qml_files: &["qml/main.qml", "qml/awg.qml"],
+            rust_files: &["src/oscillo_object.rs", "src/awg_object.rs", "src/instrument_manager.rs"],
+            qml_files: &["qml/main.qml", "qml/awg.qml", "qml/hub.qml"],
             ..Default::default()
         })
         .build();

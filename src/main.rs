@@ -1,5 +1,6 @@
 mod oscillo_object;
 mod awg_object;
+mod instrument_manager;
 
 use cxx_qt_lib::{QGuiApplication, QQmlApplicationEngine, QUrl};
 use std::{
@@ -118,6 +119,9 @@ fn main() {
         println!("[QML] Main UI loaded");
         eng.as_mut().load(&awg_url);
         println!("[QML] Function Generator UI loaded");
+        let hub_url = QUrl::from("qrc:/qt/qml/InstrumentUI/qml/hub.qml");
+            eng.as_mut().load(&hub_url);
+            println!("[QML] Instrument Manager UI loaded");
 
         eng.as_mut()
             .as_qqmlengine()

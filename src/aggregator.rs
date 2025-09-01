@@ -12,6 +12,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 use crate::instrument::Instrument;
+
 pub fn start_capture_thread(instr: Arc<Mutex<Instrument>>) {
     println!("Starting capture thread for scope image...");
     thread::spawn(move || {
