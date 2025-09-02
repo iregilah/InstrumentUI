@@ -319,12 +319,12 @@ ApplicationWindow {
                 anchors.fill: parent
                 cursorShape: Qt.SizeHorCursor
                 acceptedButtons: Qt.LeftButton
-                onPressed: {
+                onPressed: function (mouse) {
                     resizeHandle.startX = mouse.x
                     resizeHandle.startWidth = sidebar.width
                 }
-                onPositionChanged: {
-                    if (pressed) {
+                onPositionChanged: function (mouse) {
+                    if (mouse.buttons & Qt.LeftButton) {
                         var dx = mouse.x - resizeHandle.startX
                         var newWidth = resizeHandle.startWidth + dx
                         if (newWidth < sidebar.collapsedWidth)
@@ -365,7 +365,10 @@ ApplicationWindow {
 
     Connections {
         target: instrumentManager
-        onInstrumentListChanged: refreshInstrumentList()
+
+        function onInstrumentListChanged() {
+            refreshInstrumentList()
+        }
     }
 
     Component.onCompleted: {

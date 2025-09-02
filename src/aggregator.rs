@@ -12,7 +12,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 use crate::instrument::Instrument;
-
+use std::env;
 pub fn start_capture_thread(instr: Arc<Mutex<Instrument>>) {
     println!("Starting capture thread for scope image...");
     thread::spawn(move || {
@@ -249,7 +249,7 @@ impl Aggregator {
                             for (prt, identifier, vendor, model, instr_type) in found_list {
                                 // Avoid duplicates if already present
                                 if self.connected_instruments.values().any(|info|
-                                info.interface == if_name && info.port == prt && info.identifier == identifier) {
+                                    info.interface == if_name && info.port == prt && info.identifier == identifier) {
                                     continue;
                                 }
                                 let uuid = self.next_uuid;
@@ -305,7 +305,7 @@ impl Aggregator {
         let (prt, ident, vendor, model, instr_type) = devices[0].clone();
         // Avoid adding duplicate if already connected
         if self.connected_instruments.values().any(|info|
-        info.interface == if_name && info.port == prt && info.identifier == ident) {
+            info.interface == if_name && info.port == prt && info.identifier == ident) {
             return Some(&self.connected_instruments);
         }
         let uuid = self.next_uuid;
@@ -328,7 +328,7 @@ impl Aggregator {
             if info.interface.contains("RS-485") || info.interface.contains("Serial") {
                 if let Some(serial_iface) = self.comm_layers.iter_mut().find(|iface| iface.name().to_uppercase().contains("RS-485")) {
                     let still_used = self.connected_instruments.values().any(|i|
-                    i.interface == info.interface && i.port == info.port);
+                        i.interface == info.interface && i.port == info.port);
                     if !still_used {
                         // Close the serial port (ignore errors)
                         let _ = serial_iface.configure_port(&info.port, &json!({ "close": true }));
@@ -500,11 +500,31 @@ impl CommLayer for LxiComm {
                 addresses.push(s.to_string());
             }
         }
+        // Fallback to runtime environment (set by main/oscillo) if no config-provided range
+        if addresses.is_empty() {
+            if let Ok(s) = env::var("INSTRUMENT_ADDR") {
+                let s = s.trim();
+                if !s.is_empty() { addresses.push(s.to_string()); }
+            }
+            if let Ok(s) = env::var("RIGOL_ADDR") {
+                let s = s.trim();
+                if !s.is_empty() { addresses.push(s.to_string()); }
+            }
+            if let Ok(ip) = env::var("OSCILLOSCOPE_IP") {
+                let ip = ip.trim();
+                if !ip.is_empty() { addresses.push(format!("{ip}:5555")); }
+            }
+        }
         if addresses.is_empty() {
             return Ok(found);
         }
+        // Normalize + de-duplicate
+        let mut seen = HashSet::new();
         for addr in addresses {
-            let target = if addr.contains(':') { addr.clone() } else { format!("{}:5555", addr) };
+            let target = if addr.contains(':') { addr } else { format!("{}:5555", addr) };
+            if !seen.insert(target.clone()) {
+                continue;
+            }
             if let Ok(mut stream) = std::net::TcpStream::connect_timeout(&target.parse()?, std::time::Duration::from_millis(500)) {
                 stream.set_read_timeout(Some(std::time::Duration::from_millis(500)))?;
                 let _ = stream.write_all(b"*IDN?\n");
@@ -531,7 +551,8 @@ impl CommLayer for LxiComm {
                             } else {
                                 None
                             };
-                            found.push((port.to_string(), addr.clone(), vendor, model, instr_type));
+                            // identifier = normalized "host:port"
+                            found.push((port.to_string(), target.clone(), vendor, model, instr_type));
                         }
                     }
                 }
