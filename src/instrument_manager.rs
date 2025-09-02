@@ -19,7 +19,7 @@ pub mod instrument_manager_qobject {
     extern "RustQt" {
         #[qobject]
         #[qml_element]
-        #[qproperty(QString, instrument_list)]
+        #[qproperty(QString, instrument_list, cxx_name = "instrumentList")]
         type InstrumentManager = super::InstrumentManagerRust;
 
         #[qinvokable]

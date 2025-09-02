@@ -37,8 +37,12 @@ ApplicationWindow {
             anchors.left: parent.left
             anchors.right: parent.right
             anchors.top: parent.top
-            TabButton { text: qsTr("Instruments") }
-            TabButton { text: qsTr("Automations") }
+            TabButton {
+                text: qsTr("Instruments")
+            }
+            TabButton {
+                text: qsTr("Automations")
+            }
         }
 
         // Instruments tab content
@@ -107,8 +111,8 @@ ApplicationWindow {
                             height: 20
                             Layout.alignment: Qt.AlignVCenter
                             Layout.margins: 2
+                            implicitWidth: badgeText.implicitWidth + 16
                             width: implicitWidth
-                            readonly property real implicitWidth: (badgeText.width + 16)
                             Text {
                                 id: badgeText
                                 text: modelData.comm
@@ -117,7 +121,9 @@ ApplicationWindow {
                                 anchors.centerIn: parent
                             }
                         }
-                        Item { Layout.fillWidth: true }
+                        Item {
+                            Layout.fillWidth: true
+                        }
                         Button {
                             text: "⋮"
                             flat: true
@@ -125,9 +131,15 @@ ApplicationWindow {
                             Layout.alignment: Qt.AlignVCenter
                             Menu {
                                 id: instMenu
-                                MenuItem { text: qsTr("Send to New Window"); onTriggered: console.log("Send to New Window") }
-                                MenuItem { text: qsTr("Configure"); onTriggered: console.log("Configure instrument") }
-                                MenuItem { text: qsTr("Disconnect"); onTriggered: console.log("Disconnect instrument") }
+                                MenuItem {
+                                    text: qsTr("Send to New Window"); onTriggered: console.log("Send to New Window")
+                                }
+                                MenuItem {
+                                    text: qsTr("Configure"); onTriggered: console.log("Configure instrument")
+                                }
+                                MenuItem {
+                                    text: qsTr("Disconnect"); onTriggered: console.log("Disconnect instrument")
+                                }
                             }
                             onClicked: instMenu.open()
                         }
@@ -160,7 +172,9 @@ ApplicationWindow {
                 Button {
                     text: qsTr("Open")
                     menu: Menu {
-                        MenuItem { text: qsTr("Open Recent"); enabled: false }
+                        MenuItem {
+                            text: qsTr("Open Recent"); enabled: false
+                        }
                         // TODO: populate recent items
                     }
                 }
@@ -205,8 +219,8 @@ ApplicationWindow {
                             height: 20
                             Layout.alignment: Qt.AlignVCenter
                             Layout.margins: 2
+                            implicitWidth: stateText.implicitWidth + 16
                             width: implicitWidth
-                            readonly property real implicitWidth: (stateText.width + 16)
                             Text {
                                 id: stateText
                                 text: modelData.state
@@ -215,7 +229,9 @@ ApplicationWindow {
                                 anchors.centerIn: parent
                             }
                         }
-                        Item { Layout.fillWidth: true }
+                        Item {
+                            Layout.fillWidth: true
+                        }
                         Button {
                             text: "⋮"
                             flat: true
@@ -223,12 +239,24 @@ ApplicationWindow {
                             Layout.alignment: Qt.AlignVCenter
                             Menu {
                                 id: autoMenu
-                                MenuItem { text: qsTr("Edit"); onTriggered: console.log("Edit automation") }
-                                MenuItem { text: qsTr("Rename"); onTriggered: console.log("Rename automation") }
-                                MenuItem { text: qsTr("Send to New Window"); onTriggered: console.log("Open automation in new window") }
-                                MenuItem { text: qsTr("Run"); onTriggered: console.log("Run automation") }
-                                MenuItem { text: qsTr("Export"); onTriggered: console.log("Export automation") }
-                                MenuItem { text: qsTr("Delete"); onTriggered: console.log("Delete automation") }
+                                MenuItem {
+                                    text: qsTr("Edit"); onTriggered: console.log("Edit automation")
+                                }
+                                MenuItem {
+                                    text: qsTr("Rename"); onTriggered: console.log("Rename automation")
+                                }
+                                MenuItem {
+                                    text: qsTr("Send to New Window"); onTriggered: console.log("Open automation in new window")
+                                }
+                                MenuItem {
+                                    text: qsTr("Run"); onTriggered: console.log("Run automation")
+                                }
+                                MenuItem {
+                                    text: qsTr("Export"); onTriggered: console.log("Export automation")
+                                }
+                                MenuItem {
+                                    text: qsTr("Delete"); onTriggered: console.log("Delete automation")
+                                }
                             }
                             onClicked: autoMenu.open()
                         }
@@ -302,8 +330,12 @@ ApplicationWindow {
     }
 
     // List models
-    ListModel { id: instrumentListModel }
-    ListModel { id: automationListModel }
+    ListModel {
+        id: instrumentListModel
+    }
+    ListModel {
+        id: automationListModel
+    }
 
     Connections {
         target: instrumentManager
@@ -320,7 +352,7 @@ ApplicationWindow {
         instrumentManager.scan()
         // Populate dummy automations for demonstration
         automationListModel.clear()
-        automationListModel.append({ "name": "Test Script 1", "state": "idle" })
-        automationListModel.append({ "name": "Calibration", "state": "running" })
+        automationListModel.append({"name": "Test Script 1", "state": "idle"})
+        automationListModel.append({"name": "Calibration", "state": "running"})
     }
 }

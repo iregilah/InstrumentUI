@@ -117,18 +117,16 @@ fn main() {
     if let Some(mut eng) = engine.as_mut() {
         let main_url = QUrl::from("qrc:/qt/qml/InstrumentUI/qml/main.qml");
         let awg_url = QUrl::from("qrc:/qt/qml/InstrumentUI/qml/awg.qml");
-        let hub_url =  QUrl::from("qrc:/qt/qml/InstrumentUI/qml/hub.qml");
+        let hub_url = QUrl::from("qrc:/qt/qml/InstrumentUI/qml/hub.qml");
 
         eng.as_mut().load(&main_url);
         println!("[QML] Main UI loaded");
+
         eng.as_mut().load(&hub_url);
-        println!("[QML] main.qml betöltve");
+        println!("[QML] Instrument Manager UI loaded");
 
         eng.as_mut().load(&awg_url);
         println!("[QML] Function Generator UI loaded");
-        let hub_url = QUrl::from("qrc:/qt/qml/InstrumentUI/qml/hub.qml");
-            eng.as_mut().load(&hub_url);
-            println!("[QML] Instrument Manager UI loaded");
 
         eng.as_mut()
             .as_qqmlengine()
