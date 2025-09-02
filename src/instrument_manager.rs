@@ -5,7 +5,7 @@ use crate::aggregator::{Aggregator, InstrumentInfo};
 use cxx_qt::CxxQtType;
 use cxx_qt_lib::QString;
 use std::pin::Pin;
-
+use std::sync::{Arc, Mutex};
 #[cxx_qt::bridge]
 pub mod instrument_manager_qobject {
     // Qt/C++ types go here
@@ -30,19 +30,19 @@ pub mod instrument_manager_qobject {
 }
 
 pub struct InstrumentManagerRust {
-    aggregator: Aggregator,
+    aggregator: Arc<Mutex<Aggregator>>,
     instrument_list: QString,
 }
 
 impl Default for InstrumentManagerRust {
     fn default() -> Self {
-        let aggregator = Aggregator::new().unwrap_or_else(|e| {
+        let aggregator_instance = Aggregator::new().unwrap_or_else(|e| {
             eprintln!("Failed to initialize Aggregator: {}", e);
             // Fallback to default config if initialization fails
             Aggregator::new().unwrap()
         });
         Self {
-            aggregator,
+            aggregator: Arc::new(Mutex::new(aggregator_instance)),
             instrument_list: QString::from("[]"),
         }
     }
@@ -52,45 +52,54 @@ impl instrument_manager_qobject::InstrumentManager {
     pub fn scan(self: Pin<&mut Self>) {
         let mut this = self;
         println!("[UI] Scanning for instruments...");
-        let agg = unsafe { &mut this.as_mut().rust_mut().get_unchecked_mut().aggregator };
-        // Reset instrument list before scanning
-        agg.connected_instruments.clear();
-        agg.next_uuid = 0;
-        // Perform discovery on all interfaces
-        let devices = agg.discover_all();
-        // Build JSON array of instruments
-        let mut list_json = vec![];
-        for (_uuid, info) in devices.iter() {
-            // Construct display name
-            let name = if let Some(model) = &info.model {
-                if let Some(vendor) = &info.vendor {
-                    format!("{} {}", vendor, model)
+        let qt_thread = this.as_ref().qt_thread();
+        let aggregator_clone = {
+            let rust = unsafe { this.as_mut().rust_mut().get_unchecked_mut() };
+            rust.aggregator.clone()
+        };
+        std::thread::spawn(move || {
+            let mut agg = aggregator_clone.lock().unwrap();
+            // Reset instrument list before scanning
+            agg.connected_instruments.clear();
+            agg.next_uuid = 0;
+            // Perform discovery on all interfaces
+            let devices = agg.discover_all();
+            // Build JSON array of instruments
+            let mut list_json = vec![];
+            for (_uuid, info) in devices.iter() {
+                // Construct display name
+                let name = if let Some(model) = &info.model {
+                    if let Some(vendor) = &info.vendor {
+                        format!("{} {}", vendor, model)
+                    } else {
+                        model.clone()
+                    }
+                } else if let Some(vendor) = &info.vendor {
+                    vendor.clone()
+                } else if let Some(instr_type) = &info.instrument_type {
+                    instr_type.clone()
                 } else {
-                    model.clone()
-                }
-            } else if let Some(vendor) = &info.vendor {
-                vendor.clone()
-            } else if let Some(instr_type) = &info.instrument_type {
-                instr_type.clone()
-            } else {
-                info.identifier.clone()
-            };
-            // Determine communication channel badge text
-            let comm = if info.interface.contains("USB") {
-                "USB"
-            } else if info.interface.contains("GPIB") {
-                "GPIB"
-            } else if info.interface.contains("LXI") || info.interface.contains("TCP") {
-                "LAN"
-            } else if info.interface.contains("RS-485") || info.interface.contains("Serial") {
-                "RS485"
-            } else {
-                info.interface.as_str()
-            };
-            list_json.push(json!({ "name": name, "comm": comm }));
-        }
-        let json_str = serde_json::to_string(&list_json).unwrap_or_else(|_| "[]".to_string());
-        this.as_mut().set_instrument_list(QString::from(json_str));
-        println!("[UI] Scan complete, found {} instrument(s)", list_json.len());
+                    info.identifier.clone()
+                };
+                // Determine communication channel badge text
+                let comm = if info.interface.contains("USB") {
+                    "USB"
+                } else if info.interface.contains("GPIB") {
+                    "GPIB"
+                } else if info.interface.contains("LXI") || info.interface.contains("TCP") {
+                    "LAN"
+                } else if info.interface.contains("RS-485") || info.interface.contains("Serial") {
+                    "RS485"
+                } else {
+                    info.interface.as_str()
+                };
+                list_json.push(json!({ "name": name, "comm": comm }));
+            }
+            let json_str = serde_json::to_string(&list_json).unwrap_or_else(|_| "[]".to_string());
+            let _ = qt_thread.queue(move |qobj| {
+                qobj.set_instrument_list(QString::from(&json_str));
+                println!("[UI] Scan complete, found {} instrument(s)", list_json.len());
+            });
+        });
     }
 }

@@ -49,7 +49,7 @@ pub fn start_capture_thread(instr: Arc<Mutex<Instrument>>) {
     });
 }
 // Communication layer trait for low-level interfaces
-pub trait CommLayer {
+pub trait CommLayer: Send {
     fn name(&self) -> &str;
     fn lsports(&self) -> Result<Vec<String>, Box<dyn Error>>;
     fn configure_port(&mut self, port: &str, settings: &Value) -> Result<(), Box<dyn Error>>;
@@ -73,7 +73,7 @@ pub struct InstrumentInfo {
 pub struct Aggregator {
     pub connected_instruments: HashMap<u32, InstrumentInfo>,
     pub next_uuid: u32,
-    pub comm_layers: Vec<Box<dyn CommLayer>>,
+    pub comm_layers: Vec<Box<dyn CommLayer + Send>>,
     pub config: Value,
 }
 
@@ -98,7 +98,7 @@ impl Aggregator {
             }
         };
         // Prepare enabled communication layer instances
-        let mut comm_layers: Vec<Box<dyn CommLayer>> = Vec::new();
+        let mut comm_layers: Vec<Box<dyn CommLayer + Send>> = Vec::new();
         let is_enabled = |name: &str| {
             config.get(name)
                 .and_then(|sect| sect.get("enabled"))
@@ -709,7 +709,7 @@ impl CommLayer for UsbComm {
 // Serial (MODBUS-RTU/RS-485 over COM port) communication layer
 struct SerialComm {
     allowed_ports: Option<HashSet<String>>,
-    open_ports: HashMap<String, Box<dyn serialport::SerialPort>>,
+    open_ports: HashMap<String, Box<dyn serialport::SerialPort + Send>>,
 }
 
 impl SerialComm {
