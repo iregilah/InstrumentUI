@@ -74,7 +74,7 @@ ApplicationWindow {
                 anchors.right: parent.right
                 anchors.top: parent.top
                 spacing: 8
-                padding: 4
+                anchors.margins: 4
                 Button {
                     text: qsTr("Connect")
                     onClicked: {
@@ -177,7 +177,7 @@ ApplicationWindow {
                 anchors.right: parent.right
                 anchors.top: parent.top
                 spacing: 8
-                padding: 4
+                anchors.margins: 4
                 Button {
                     text: qsTr("New")
                     onClicked: console.log("New automation clicked")
