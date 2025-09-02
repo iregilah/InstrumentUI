@@ -183,8 +183,12 @@ ApplicationWindow {
                     onClicked: console.log("New automation clicked")
                 }
                 Button {
+                    id: openButton
                     text: qsTr("Open")
-                    menu: Menu {
+                    onClicked: openMenu.open()
+                    Menu {
+                        id: openMenu
+                        y: openButton.height
                         MenuItem {
                             text: qsTr("Open Recent"); enabled: false
                         }
