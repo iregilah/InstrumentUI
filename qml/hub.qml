@@ -101,7 +101,9 @@ ApplicationWindow {
                 anchors.bottom: parent.bottom
                 model: instrumentListModel
                 clip: true
-                ScrollBar.vertical.policy: ScrollBar.AsNeeded
+                ScrollBar.vertical: ScrollBar {
+                    policy: ScrollBar.AsNeeded
+                }
 
                 delegate: Item {
                     width: instrumentListView.width
@@ -214,7 +216,9 @@ ApplicationWindow {
                 anchors.bottom: parent.bottom
                 model: automationListModel
                 clip: true
-                ScrollBar.vertical.policy: ScrollBar.AsNeeded
+                ScrollBar.vertical: ScrollBar {
+                    policy: ScrollBar.AsNeeded
+                }
 
                 delegate: Item {
                     width: automationListView.width
@@ -314,18 +318,23 @@ ApplicationWindow {
             MouseArea {
                 anchors.fill: parent
                 cursorShape: Qt.SizeHorCursor
-                hoverEnabled: true
+                acceptedButtons: Qt.LeftButton
                 onPressed: {
                     resizeHandle.startX = mouse.x
                     resizeHandle.startWidth = sidebar.width
                 }
                 onPositionChanged: {
-                    var dx = mouse.x - resizeHandle.startX
-                    var newWidth = resizeHandle.startWidth + dx
-                    if (newWidth < sidebar.collapsedWidth) {
-                        newWidth = sidebar.collapsedWidth
+                    if (pressed) {
+                        var dx = mouse.x - resizeHandle.startX
+                        var newWidth = resizeHandle.startWidth + dx
+                        if (newWidth < sidebar.collapsedWidth)
+                            newWidth = sidebar.collapsedWidth
+                        sidebar.width = newWidth
                     }
-                    sidebar.width = newWidth
+                }
+                onReleased: {
+                    if (sidebar.width > sidebar.collapsedWidth)
+                        sidebar.expandedWidth = sidebar.width
                 }
             }
         }
