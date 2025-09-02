@@ -248,8 +248,13 @@ impl Aggregator {
                         Ok(found_list) => {
                             for (prt, identifier, vendor, model, instr_type) in found_list {
                                 // Avoid duplicates if already present
+                                // Kerüljük a duplikátumot:
+                                // 1) teljes egyezés (interface, port, identifier)
+                                // 2) ugyanazon interfészen azonos identifier (pl. ugyanaz az IP különböző adaptereken)
                                 if self.connected_instruments.values().any(|info|
-                                    info.interface == if_name && info.port == prt && info.identifier == identifier) {
+                                    (info.interface == if_name && info.port == prt && info.identifier == identifier) ||
+                                        (info.interface == if_name && info.identifier == identifier)
+                                ) {
                                     continue;
                                 }
                                 let uuid = self.next_uuid;

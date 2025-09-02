@@ -97,6 +97,7 @@ impl instrument_manager_qobject::InstrumentManager {
             }
             let json_str = serde_json::to_string(&list_json).unwrap_or_else(|_| "[]".to_string());
             let _ = qt_thread.queue(move |qobj| {
+                println!("[UI] JSON to QML: {}", json_str);
                 qobj.set_instrument_list(QString::from(&json_str));
                 println!("[UI] Scan complete, found {} instrument(s)", list_json.len());
             });

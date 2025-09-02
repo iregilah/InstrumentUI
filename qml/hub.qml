@@ -113,7 +113,7 @@ ApplicationWindow {
                         anchors.margins: 4
                         spacing: 8
                         Label {
-                            text: modelData.name
+                            text: name || ""
                             font.pixelSize: 14
                             Layout.alignment: Qt.AlignVCenter
                             color: "#ffffff"
@@ -130,7 +130,7 @@ ApplicationWindow {
                             width: implicitWidth
                             Text {
                                 id: badgeText
-                                text: modelData.comm
+                                text: comm || ""
                                 color: "#ffffff"
                                 font.pixelSize: 12
                                 anchors.centerIn: parent
@@ -228,7 +228,7 @@ ApplicationWindow {
                         anchors.margins: 4
                         spacing: 8
                         Label {
-                            text: modelData.name
+                            text: name || ""
                             font.pixelSize: 14
                             Layout.alignment: Qt.AlignVCenter
                             color: "#ffffff"
@@ -244,7 +244,7 @@ ApplicationWindow {
                             width: implicitWidth
                             Text {
                                 id: stateText
-                                text: modelData.state
+                                text: state || ""
                                 color: "#ffffff"
                                 font.pixelSize: 12
                                 anchors.centerIn: parent
