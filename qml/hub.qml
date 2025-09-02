@@ -20,6 +20,19 @@ ApplicationWindow {
         objectName: "instrumentManager"
     }
 
+    function refreshInstrumentList() {
+        var raw = instrumentManager.instrumentList
+        var arr = []
+        try {
+            arr = JSON.parse(raw || "[]")
+        } catch (e) {
+            console.warn("instrumentList JSON parse error:", e, "raw=", raw)
+            arr = []
+        }
+        instrumentListModel.clear()
+        for (var i = 0; i < arr.length; ++i) instrumentListModel.append(arr[i])
+    }
+
     // Sidebar panel
     Rectangle {
         id: sidebar
@@ -339,17 +352,12 @@ ApplicationWindow {
 
     Connections {
         target: instrumentManager
-        onInstrumentListChanged: {
-            var data = JSON.parse(instrumentManager.instrumentList)
-            instrumentListModel.clear()
-            for (var i = 0; i < data.length; ++i) {
-                instrumentListModel.append(data[i])
-            }
-        }
+        onInstrumentListChanged: refreshInstrumentList()
     }
 
     Component.onCompleted: {
         instrumentManager.scan()
+        refreshInstrumentList()
         // Populate dummy automations for demonstration
         automationListModel.clear()
         automationListModel.append({"name": "Test Script 1", "state": "idle"})
