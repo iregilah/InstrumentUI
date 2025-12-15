@@ -168,6 +168,9 @@ impl heatmap_qobject::HeatmapObject {
             let size = self.size();
             let width = size.width();
             let height = size.height();
+            // Fill background with appropriate color
+            let bg_color = if this.dark_mode { QColor::from_rgb(0, 0, 0) } else { QColor::from_rgb(255, 255, 255) };
+            pinned_painter.as_mut().fill_rect(&QRectF::new(0.0, 0.0, width, height), &bg_color);
             let left_margin = 50.0;
             let right_margin = 20.0;
             let top_margin = 20.0;
@@ -259,13 +262,13 @@ impl heatmap_qobject::HeatmapObject {
             if !this.x_label.to_string().is_empty() {
                 let x_label_str = this.x_label.to_string();
                 let label_w = x_label_str.len() as f64 * 7.0;
-                let text_x = plot_x + plot_width/2.0 - label_w/2.0;
+                let text_x = plot_x + plot_width / 2.0 - label_w / 2.0;
                 let text_y = x_axis_y + 30.0;
                 pinned_painter.as_mut().draw_text(text_x, text_y, &this.x_label);
             }
             if !this.y_label.to_string().is_empty() {
                 pinned_painter.as_mut().save();
-                let center_y = plot_y + plot_height/2.0;
+                let center_y = plot_y + plot_height / 2.0;
                 pinned_painter.as_mut().translate(plot_x - 40.0, center_y);
                 pinned_painter.as_mut().rotate(-90.0);
                 pinned_painter.as_mut().draw_text(0.0, 0.0, &this.y_label);
