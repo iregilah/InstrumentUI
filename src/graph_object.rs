@@ -29,7 +29,32 @@ pub mod graph_object_qobject {
         fn drawEllipse(self: Pin<&mut QPainter>, rect: &QRectF);
         #[rust_name = "set_render_hint"]
         fn setRenderHint(self: Pin<&mut QPainter>, hint: i32, enabled: bool);
+        #[rust_name = "fill_rect"]
+        fn fillRect(self: Pin<&mut QPainter>, rect: &QRectF, color: &QColor);
     }
+    unsafe extern "C++" {
+        include!(<QtGui/QImage>);
+        type QImage;
+    }
+    unsafe extern "C++" {
+        include!(<QtGui/QGuiApplication>);
+        include!(<QtGui/QClipboard>);
+        type QClipboard;
+        #[namespace = "QGuiApplication"]
+        #[rust_name = "clipboard"]
+        fn clipboard() -> *mut QClipboard;
+        #[rust_name = "clipboard_set_text"]
+        fn setText(self: Pin<&mut QClipboard>, text: &QString);
+        #[rust_name = "clipboard_set_image"]
+        fn setImage(self: Pin<&mut QClipboard>, image: &QImage);
+    }
+    unsafe extern "C++" {
+        #[rust_name = "qpainteditem_to_qquickitem"]
+        fn static_cast_QQuickItem(ptr: *mut QQuickPaintedItem) -> *mut QQuickItem;
+        #[rust_name = "graphobject_to_qpainteditem"]
+        fn static_cast_QQuickPaintedItem(ptr: *mut GraphObject) -> *mut QQuickPaintedItem;
+    }
+
     extern "RustQt" {
         #[qobject]
         #[qml_element]
@@ -71,6 +96,18 @@ pub mod graph_object_qobject {
         fn pan(self: Pin<&mut GraphObject>, delta_x: f64, delta_y: f64);
         #[qinvokable]
         fn reset_zoom(self: Pin<&mut GraphObject>);
+        #[qinvokable]
+        fn save_csv(self: Pin<&mut GraphObject>, file_path: &QString);
+        #[qinvokable]
+        fn copy_data(self: Pin<&mut GraphObject>);
+        #[qinvokable]
+        fn copy_image(self: Pin<&mut GraphObject>);
+        #[qinvokable]
+        fn place_vertical_cursor(self: Pin<&mut GraphObject>, x: f64);
+        #[qinvokable]
+        fn place_horizontal_cursor(self: Pin<&mut GraphObject>, y: f64);
+        #[qinvokable]
+        fn clear_cursors(self: Pin<&mut GraphObject>);
         #[cxx_override]
         unsafe fn paint(self: Pin<&mut GraphObject>, painter: *mut QPainter);
     }
@@ -125,6 +162,8 @@ pub struct GraphObjectRust {
     // internal state:
     initial_x_set: bool,
     last_frame_span: Option<f64>,
+    cursor_x_positions: Vec<f64>,
+    cursor_y_positions: Vec<f64>,
 }
 impl Default for GraphObjectRust {
     fn default() -> Self {
@@ -147,6 +186,8 @@ impl Default for GraphObjectRust {
             y_label: QString::from(""),
             initial_x_set: false,
             last_frame_span: None,
+            cursor_x_positions: Vec::new(),
+            cursor_y_positions: Vec::new(),
         }
     }
 }
@@ -190,6 +231,94 @@ impl graph_object_qobject::GraphObject {
             return QString::from(trimmed);
         }
         QString::from(&formatted)
+    }
+
+    pub fn save_csv(mut self: Pin<&mut Self>, file_path: &QString) {
+        use std::io::Write;
+        let this = self.as_ref().rust();
+        if let Ok(mut file) = std::fs::File::create(std::path::Path::new(&file_path.to_string())) {
+            for (i, s) in this.series_list.iter().enumerate() {
+                if i > 0 {
+                    writeln!(file).ok();
+                }
+                let header_x = if !this.x_label.to_string().is_empty() { this.x_label.to_string() } else { "X".to_owned() };
+                let header_y = s.name.clone();
+                writeln!(file, "{},{}", header_x, header_y).ok();
+                for (x, y) in s.data_x.iter().zip(&s.data_y) {
+                    writeln!(file, "{:.6},{:.6}", x, y).ok();
+                }
+            }
+        }
+    }
+    pub fn copy_data(mut self: Pin<&mut Self>) {
+        let this = self.as_ref().rust();
+        let clipboard_ptr = clipboard();
+        if !clipboard_ptr.is_null() {
+            let mut pinned_cb = unsafe { Pin::new_unchecked(&mut *clipboard_ptr) };
+            let mut csv = String::new();
+            for (i, s) in this.series_list.iter().enumerate() {
+                if i > 0 {
+                    csv.push('\n');
+                }
+                let header_x = if !this.x_label.to_string().is_empty() { this.x_label.to_string() } else { "X".to_owned() };
+                csv += &format!("{},{}\n", header_x, s.name);
+                for (x, y) in s.data_x.iter().zip(&s.data_y) {
+                    csv += &format!("{:.6},{:.6}\n", x, y);
+                }
+            }
+            let qstr = QString::from(&csv);
+            pinned_cb.as_mut().clipboard_set_text(&qstr);
+        }
+    }
+    pub fn copy_image(mut self: Pin<&mut Self>) {
+        let clipboard_ptr = clipboard();
+        if clipboard_ptr.is_null() {
+            return;
+        }
+        unsafe {
+            if let Some(cb) = clipboard_ptr.as_mut() {
+                let mut pinned_cb = Pin::new_unchecked(cb);
+                // Attempt to grab image from QQuickPaintedItem
+                let raw_ptr = static_cast_QQuickPaintedItem(self.as_mut().cpp_mut());
+                if !raw_ptr.is_null() {
+                    let grab_result = Pin::new_unchecked(&mut *raw_ptr).grab_to_image_item();
+                    if !grab_result.is_null() {
+                        let img = (*grab_result).image();
+                        pinned_cb.as_mut().clipboard_set_image(&img);
+                        return;
+                    }
+                }
+                // Fallback: copy placeholder text if image not captured
+                let msg = QString::from("[Image Data]");
+                pinned_cb.as_mut().clipboard_set_text(&msg);
+            }
+        }
+    }
+    pub fn place_vertical_cursor(mut self: Pin<&mut Self>, x: f64) {
+        let this = self.as_mut().rust_mut();
+        if this.cursor_x_positions.len() < 2 {
+            this.cursor_x_positions.push(x);
+        } else {
+            this.cursor_x_positions.clear();
+            this.cursor_x_positions.push(x);
+        }
+        self.update();
+    }
+    pub fn place_horizontal_cursor(mut self: Pin<&mut Self>, y: f64) {
+        let this = self.as_mut().rust_mut();
+        if this.cursor_y_positions.len() < 2 {
+            this.cursor_y_positions.push(y);
+        } else {
+            this.cursor_y_positions.clear();
+            this.cursor_y_positions.push(y);
+        }
+        self.update();
+    }
+    pub fn clear_cursors(mut self: Pin<&mut Self>) {
+        let this = self.as_mut().rust_mut();
+        this.cursor_x_positions.clear();
+        this.cursor_y_positions.clear();
+        self.update();
     }
 
     pub fn add_series(mut self: Pin<&mut Self>, name: &QString, series_type: i32, color: &QColor, thickness: f64, line_style: i32, marker: bool) {
@@ -266,12 +395,14 @@ impl graph_object_qobject::GraphObject {
             }
             if new_x_min == std::f64::MAX {
                 // no series or no data: reset to 0..1
-                new_x_min = 0.0; new_x_max = 1.0;
+                new_x_min = 0.0;
+                new_x_max = 1.0;
             } else if new_x_min == new_x_max {
                 new_x_max = new_x_min + 1.0;
             }
             if new_y_min == std::f64::MAX {
-                new_y_min = 0.0; new_y_max = 1.0;
+                new_y_min = 0.0;
+                new_y_max = 1.0;
             } else if new_y_min == new_y_max {
                 new_y_max = new_y_min + 1.0;
             }
@@ -598,6 +729,9 @@ impl graph_object_qobject::GraphObject {
             let size = self.size();
             let width = size.width();
             let height = size.height();
+            // Fill background
+            let bg_color = if this.dark_mode { QColor::from_rgb(0, 0, 0) } else { QColor::from_rgb(255, 255, 255) };
+            pinned_painter.as_mut().fill_rect(&QRectF::new(0.0, 0.0, width, height), &bg_color);
             // Define margins for axes and legend
             let left_margin: f64 = 60.0;
             let right_margin: f64 = 10.0;
@@ -740,13 +874,13 @@ impl graph_object_qobject::GraphObject {
                             // digital: draw steps
                             for k in 0..(s.data_x.len() - 1) {
                                 let x_curr = plot_x + (s.data_x[k] - this.x_min) * x_scale;
-                                let x_next = plot_x + (s.data_x[k+1] - this.x_min) * x_scale;
+                                let x_next = plot_x + (s.data_x[k + 1] - this.x_min) * x_scale;
                                 let y_curr = plot_y + plot_height - ((s.data_y[k] - this.y_min) * y_scale);
-                                let y_next = plot_y + plot_height - ((s.data_y[k+1] - this.y_min) * y_scale);
+                                let y_next = plot_y + plot_height - ((s.data_y[k + 1] - this.y_min) * y_scale);
                                 // horizontal line at y_curr
                                 pinned_painter.as_mut().draw_line(x_curr, y_curr, x_next, y_curr);
                                 // vertical transition line at x_next
-                                if (s.data_y[k] - s.data_y[k+1]).abs() > f64::EPSILON {
+                                if (s.data_y[k] - s.data_y[k + 1]).abs() > f64::EPSILON {
                                     pinned_painter.as_mut().draw_line(x_next, y_curr, x_next, y_next);
                                 }
                             }
@@ -755,8 +889,8 @@ impl graph_object_qobject::GraphObject {
                             for k in 0..(s.data_x.len() - 1) {
                                 let x1 = plot_x + (s.data_x[k] - this.x_min) * x_scale;
                                 let y1 = plot_y + plot_height - ((s.data_y[k] - this.y_min) * y_scale);
-                                let x2 = plot_x + (s.data_x[k+1] - this.x_min) * x_scale;
-                                let y2 = plot_y + plot_height - ((s.data_y[k+1] - this.y_min) * y_scale);
+                                let x2 = plot_x + (s.data_x[k + 1] - this.x_min) * x_scale;
+                                let y2 = plot_y + plot_height - ((s.data_y[k + 1] - this.y_min) * y_scale);
                                 pinned_painter.as_mut().draw_line(x1, y1, x2, y2);
                             }
                         }
@@ -767,7 +901,7 @@ impl graph_object_qobject::GraphObject {
                         for k in 0..s.data_x.len() {
                             let x_pt = plot_x + (s.data_x[k] - this.x_min) * x_scale;
                             let y_pt = plot_y + plot_height - ((s.data_y[k] - this.y_min) * y_scale);
-                            let rect = QRectF::new(x_pt - marker_size/2.0, y_pt - marker_size/2.0, marker_size, marker_size);
+                            let rect = QRectF::new(x_pt - marker_size / 2.0, y_pt - marker_size / 2.0, marker_size, marker_size);
                             pinned_painter.as_mut().draw_ellipse(&rect);
                         }
                     }
@@ -783,8 +917,8 @@ impl graph_object_qobject::GraphObject {
                     let band_bottom_y = plot_y + plot_height - band_index * band_height;
                     // band_top_y = band_bottom_y - band_height
                     // Compute series local min/max
-                    let min_val = s.data_y.iter().fold(f64::INFINITY, |a,&b| a.min(b));
-                    let max_val = s.data_y.iter().fold(f64::NEG_INFINITY, |a,&b| a.max(b));
+                    let min_val = s.data_y.iter().fold(f64::INFINITY, |a, &b| a.min(b));
+                    let max_val = s.data_y.iter().fold(f64::NEG_INFINITY, |a, &b| a.max(b));
                     let local_min = if min_val == max_val { min_val - 0.5 } else { min_val };
                     let local_max = if min_val == max_val { max_val + 0.5 } else { max_val };
                     // Scale factors
@@ -794,11 +928,11 @@ impl graph_object_qobject::GraphObject {
                         if s.is_digital {
                             for k in 0..(s.data_x.len() - 1) {
                                 let x_curr = plot_x + (s.data_x[k] - this.x_min) * x_scale;
-                                let x_next = plot_x + (s.data_x[k+1] - this.x_min) * x_scale;
+                                let x_next = plot_x + (s.data_x[k + 1] - this.x_min) * x_scale;
                                 let y_curr = band_bottom_y - ((s.data_y[k] - local_min) * y_scale_local);
-                                let y_next = band_bottom_y - ((s.data_y[k+1] - local_min) * y_scale_local);
+                                let y_next = band_bottom_y - ((s.data_y[k + 1] - local_min) * y_scale_local);
                                 pinned_painter.as_mut().draw_line(x_curr, y_curr, x_next, y_curr);
-                                if (s.data_y[k] - s.data_y[k+1]).abs() > f64::EPSILON {
+                                if (s.data_y[k] - s.data_y[k + 1]).abs() > f64::EPSILON {
                                     pinned_painter.as_mut().draw_line(x_next, y_curr, x_next, y_next);
                                 }
                             }
@@ -806,8 +940,8 @@ impl graph_object_qobject::GraphObject {
                             for k in 0..(s.data_x.len() - 1) {
                                 let x1 = plot_x + (s.data_x[k] - this.x_min) * x_scale;
                                 let y1 = band_bottom_y - ((s.data_y[k] - local_min) * y_scale_local);
-                                let x2 = plot_x + (s.data_x[k+1] - this.x_min) * x_scale;
-                                let y2 = band_bottom_y - ((s.data_y[k+1] - local_min) * y_scale_local);
+                                let x2 = plot_x + (s.data_x[k + 1] - this.x_min) * x_scale;
+                                let y2 = band_bottom_y - ((s.data_y[k + 1] - local_min) * y_scale_local);
                                 pinned_painter.as_mut().draw_line(x1, y1, x2, y2);
                             }
                         }
@@ -817,7 +951,7 @@ impl graph_object_qobject::GraphObject {
                         for k in 0..s.data_x.len() {
                             let x_pt = plot_x + (s.data_x[k] - this.x_min) * x_scale;
                             let y_pt = band_bottom_y - ((s.data_y[k] - local_min) * y_scale_local);
-                            let rect = QRectF::new(x_pt - marker_size/2.0, y_pt - marker_size/2.0, marker_size, marker_size);
+                            let rect = QRectF::new(x_pt - marker_size / 2.0, y_pt - marker_size / 2.0, marker_size, marker_size);
                             pinned_painter.as_mut().draw_ellipse(&rect);
                         }
                     }
@@ -837,7 +971,7 @@ impl graph_object_qobject::GraphObject {
                     }
                 }
                 let legend_width = max_text_width + 20.0;
-                let legend_height = this.series_list.len() as f64 * entry_height + legend_padding*2.0;
+                let legend_height = this.series_list.len() as f64 * entry_height + legend_padding * 2.0;
                 let (legend_x, legend_y) = match this.legend_position {
                     0 => (plot_x + 5.0, plot_y + 5.0), // top-left
                     1 => (plot_x + plot_width - legend_width - 5.0, plot_y + 5.0), // top-right
@@ -859,12 +993,52 @@ impl graph_object_qobject::GraphObject {
                     let text = QString::from(&s.name);
                     // Color sample (line or square)
                     pinned_painter.as_mut().set_pen(&s.color, 2.0, 1);
-                    let line_y = legend_y + legend_padding + idx as f64 * entry_height + entry_height/2.0;
+                    let line_y = legend_y + legend_padding + idx as f64 * entry_height + entry_height / 2.0;
                     pinned_painter.as_mut().draw_line(legend_x + 5.0, line_y, legend_x + 15.0, line_y);
                     // Text
                     pinned_painter.as_mut().set_pen(&axis_color, 0.0, 1);
                     pinned_painter.as_mut().draw_text(legend_x + 20.0, legend_y + legend_padding + idx as f64 * entry_height + 10.0, &text);
                 }
+            }
+            // Draw cursor lines and differences
+            pinned_painter.as_mut().set_pen(&axis_color, 1.0, 2);
+            // Vertical cursors
+            for x_val in &this.cursor_x_positions {
+                if *x_val >= this.x_min && *x_val <= this.x_max {
+                    let x_pix = plot_x + ((*x_val - this.x_min) / (this.x_max - this.x_min)) * plot_width;
+                    pinned_painter.as_mut().draw_line(x_pix, plot_y, x_pix, plot_y + plot_height);
+                }
+            }
+            // Horizontal cursors (if not separate series)
+            if !this.separate_series {
+                for y_val in &this.cursor_y_positions {
+                    if *y_val >= this.y_min && *y_val <= this.y_max {
+                        let y_pix = plot_y + plot_height - ((*y_val - this.y_min) / (this.y_max - this.y_min)) * plot_height;
+                        pinned_painter.as_mut().draw_line(plot_x, y_pix, plot_x + plot_width, y_pix);
+                    }
+                }
+            }
+            // Cursor difference labels
+            pinned_painter.as_mut().set_pen(&axis_color, 0.0, 1);
+            if this.cursor_x_positions.len() == 2 {
+                let dx = (this.cursor_x_positions[1] - this.cursor_x_positions[0]).abs();
+                let label = QString::from(&format!("ΔX: {}", self.as_ref().format_value(dx).to_string()));
+                let text_width = label.to_string().len() as f64 * 7.0;
+                let text_x = plot_x + plot_width / 2.0 - text_width / 2.0;
+                let text_y = plot_y + 15.0;
+                pinned_painter.as_mut().draw_text(text_x, text_y, &label);
+            }
+            if !this.separate_series && this.cursor_y_positions.len() == 2 {
+                let dy = (this.cursor_y_positions[1] - this.cursor_y_positions[0]).abs();
+                let label = QString::from(&format!("ΔY: {}", self.as_ref().format_value(dy).to_string()));
+                let text_x = plot_x + 10.0;
+                let mid_y = {
+                    let y1_pix = plot_y + plot_height - ((this.cursor_y_positions[0] - this.y_min) / (this.y_max - this.y_min)) * plot_height;
+                    let y2_pix = plot_y + plot_height - ((this.cursor_y_positions[1] - this.y_min) / (this.y_max - this.y_min)) * plot_height;
+                    (y1_pix + y2_pix) / 2.0
+                };
+                let text_y = mid_y + 4.0;
+                pinned_painter.as_mut().draw_text(text_x, text_y, &label);
             }
         }
     }
