@@ -13,6 +13,8 @@ pub mod cli;
 pub mod prelude;
 pub mod aggregator;
 pub mod instrument;
+pub mod graph_object;
+pub mod heatmap_object;
 
 /// Gyors eléréshez egy mini‑prelude:
 pub use prelude::*;

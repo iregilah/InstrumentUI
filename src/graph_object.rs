@@ -74,6 +74,8 @@ pub mod graph_object_qobject {
         #[qproperty(bool, separate_series, cxx_name = "separateSeries")]
         #[qproperty(int, buffer_size, cxx_name = "bufferSize")]
         #[qproperty(bool, dark_mode, cxx_name = "darkMode")]
+        #[qproperty(bool, x_log_scale, cxx_name = "xLogScale")]
+        #[qproperty(bool, y_log_scale, cxx_name = "yLogScale")]
         type GraphObject = super::GraphObjectRust;
     }
     impl cxx_qt::Threading for GraphObject {}
@@ -108,6 +110,8 @@ pub mod graph_object_qobject {
         fn place_horizontal_cursor(self: Pin<&mut GraphObject>, y: f64);
         #[qinvokable]
         fn clear_cursors(self: Pin<&mut GraphObject>);
+        #[qinvokable]
+        fn request_repaint(self: Pin<&mut GraphObject>);
         #[cxx_override]
         unsafe fn paint(self: Pin<&mut GraphObject>, painter: *mut QPainter);
     }
@@ -164,6 +168,8 @@ pub struct GraphObjectRust {
     last_frame_span: Option<f64>,
     cursor_x_positions: Vec<f64>,
     cursor_y_positions: Vec<f64>,
+    x_log_scale: bool,
+    y_log_scale: bool,
 }
 impl Default for GraphObjectRust {
     fn default() -> Self {
@@ -188,6 +194,8 @@ impl Default for GraphObjectRust {
             last_frame_span: None,
             cursor_x_positions: Vec::new(),
             cursor_y_positions: Vec::new(),
+            x_log_scale: false,
+            y_log_scale: false,
         }
     }
 }
@@ -318,6 +326,10 @@ impl graph_object_qobject::GraphObject {
         let this = self.as_mut().rust_mut();
         this.cursor_x_positions.clear();
         this.cursor_y_positions.clear();
+        self.update();
+    }
+
+    pub fn request_repaint(mut self: Pin<&mut Self>) {
         self.update();
     }
 
@@ -745,6 +757,27 @@ impl graph_object_qobject::GraphObject {
             // Axes positions
             let x_axis_y = plot_y + plot_height;  // y coordinate of X axis line (bottom of plot area)
             let y_axis_x = plot_x;                // x coordinate of Y axis line (left of plot area)
+            // Determine effective min/max for log scales (avoid <=0)
+            let (x_min_val, x_max_val) = if this.x_log_scale {
+                if this.x_max <= 0.0 {
+                    (0.1, 1.0)
+                } else {
+                    let min_val = if this.x_min > 0.0 { this.x_min } else { (this.x_max / 1e6).max(1e-9) };
+                    (min_val, this.x_max)
+                }
+            } else {
+                (this.x_min, this.x_max)
+            };
+            let (y_min_val, y_max_val) = if this.y_log_scale {
+                if this.y_max <= 0.0 {
+                    (0.1, 1.0)
+                } else {
+                    let min_val = if this.y_min > 0.0 { this.y_min } else { (this.y_max / 1e6).max(1e-9) };
+                    (min_val, this.y_max)
+                }
+            } else {
+                (this.y_min, this.y_max)
+            };
             // Draw grid (if enabled) and axes lines
             // Set pen for grid and axis lines (color gray for grid, white/black for axes)
             let axis_color = if this.dark_mode { QColor::from_rgb(255, 255, 255) } else { QColor::from_rgb(0, 0, 0) };
@@ -754,8 +787,20 @@ impl graph_object_qobject::GraphObject {
             let num_x_ticks = 5;
             for i in 0..num_x_ticks {
                 let t = i as f64 / (num_x_ticks - 1) as f64;
-                let data_x_val = this.x_min + t * (this.x_max - this.x_min);
-                let x_pixel = plot_x + ((data_x_val - this.x_min) / (this.x_max - this.x_min)) * plot_width;
+                let data_x_val = if this.x_log_scale {
+                    let log_min = x_min_val.log10();
+                    let log_max = x_max_val.log10();
+                    (10.0_f64).powf(log_min + t * (log_max - log_min))
+                } else {
+                    x_min_val + t * (x_max_val - x_min_val)
+                };
+                let x_pixel = if this.x_log_scale {
+                    let log_min = x_min_val.log10();
+                    let log_max = x_max_val.log10();
+                    plot_x + ((data_x_val.log10() - log_min) / (log_max - log_min)) * plot_width
+                } else {
+                    plot_x + ((data_x_val - x_min_val) / (x_max_val - x_min_val)) * plot_width
+                };
                 if this.grid_visible {
                     // vertical grid line
                     pinned_painter.as_mut().draw_line(x_pixel, plot_y, x_pixel, plot_y + plot_height);
@@ -769,8 +814,20 @@ impl graph_object_qobject::GraphObject {
             let num_y_ticks = 5;
             for j in 0..num_y_ticks {
                 let t = j as f64 / (num_y_ticks - 1) as f64;
-                let data_y_val = this.y_min + t * (this.y_max - this.y_min);
-                let y_pixel = plot_y + plot_height - ((data_y_val - this.y_min) / (this.y_max - this.y_min)) * plot_height;
+                let data_y_val = if this.y_log_scale {
+                    let log_min = y_min_val.log10();
+                    let log_max = y_max_val.log10();
+                    (10.0_f64).powf(log_min + t * (log_max - log_min))
+                } else {
+                    y_min_val + t * (y_max_val - y_min_val)
+                };
+                let y_pixel = plot_y + plot_height - (if this.y_log_scale {
+                    let log_min = y_min_val.log10();
+                    let log_max = y_max_val.log10();
+                    ((data_y_val.log10() - log_min) / (log_max - log_min)) * plot_height
+                } else {
+                    ((data_y_val - y_min_val) / (y_max_val - y_min_val)) * plot_height
+                });
                 if this.grid_visible && !this.separate_series {
                     // horizontal grid line
                     pinned_painter.as_mut().draw_line(plot_x, y_pixel, plot_x + plot_width, y_pixel);
@@ -784,8 +841,20 @@ impl graph_object_qobject::GraphObject {
             // X-axis ticks and labels
             for i in 0..num_x_ticks {
                 let t = i as f64 / (num_x_ticks - 1) as f64;
-                let data_x_val = this.x_min + t * (this.x_max - this.x_min);
-                let x_pixel = plot_x + ((data_x_val - this.x_min) / (this.x_max - this.x_min)) * plot_width;
+                let data_x_val = if this.x_log_scale {
+                    let log_min = x_min_val.log10();
+                    let log_max = x_max_val.log10();
+                    (10.0_f64).powf(log_min + t * (log_max - log_min))
+                } else {
+                    x_min_val + t * (x_max_val - x_min_val)
+                };
+                let x_pixel = if this.x_log_scale {
+                    let log_min = x_min_val.log10();
+                    let log_max = x_max_val.log10();
+                    plot_x + ((data_x_val.log10() - log_min) / (log_max - log_min)) * plot_width
+                } else {
+                    plot_x + ((data_x_val - x_min_val) / (x_max_val - x_min_val)) * plot_width
+                };
                 // tick mark (vertical small line)
                 let tick_len = 5.0;
                 pinned_painter.as_mut().draw_line(x_pixel, x_axis_y, x_pixel, x_axis_y - tick_len);
@@ -813,8 +882,20 @@ impl graph_object_qobject::GraphObject {
             if !this.separate_series {
                 for j in 0..num_y_ticks {
                     let t = j as f64 / (num_y_ticks - 1) as f64;
-                    let data_y_val = this.y_min + t * (this.y_max - this.y_min);
-                    let y_pixel = plot_y + plot_height - ((data_y_val - this.y_min) / (this.y_max - this.y_min)) * plot_height;
+                    let data_y_val = if this.y_log_scale {
+                        let log_min = y_min_val.log10();
+                        let log_max = y_max_val.log10();
+                        (10.0_f64).powf(log_min + t * (log_max - log_min))
+                    } else {
+                        y_min_val + t * (y_max_val - y_min_val)
+                    };
+                    let y_pixel = plot_y + plot_height - (if this.y_log_scale {
+                        let log_min = y_min_val.log10();
+                        let log_max = y_max_val.log10();
+                        ((data_y_val.log10() - log_min) / (log_max - log_min)) * plot_height
+                    } else {
+                        ((data_y_val - y_min_val) / (y_max_val - y_min_val)) * plot_height
+                    });
                     // tick mark (horizontal small line)
                     let tick_len = 5.0;
                     pinned_painter.as_mut().draw_line(y_axis_x, y_pixel, y_axis_x + tick_len, y_pixel);
@@ -862,21 +943,46 @@ impl graph_object_qobject::GraphObject {
                     continue;
                 }
                 // Choose pen for series (color, thickness, style)
-                let style_val = if s.line_style <= 0 { 1 } else { s.line_style };
+                let style_val = if s.line_stararyle <= 0 { 1 } else { s.line_style };
                 pinned_painter.as_mut().set_pen(&s.color, s.thickness, style_val);
                 if !this.separate_series {
-                    // Unified coordinate transform
-                    let x_scale = plot_width / (this.x_max - this.x_min);
-                    let y_scale = plot_height / (this.y_max - this.y_min);
                     // Draw connecting lines
                     if s.data_x.len() > 1 {
                         if s.is_digital {
                             // digital: draw steps
                             for k in 0..(s.data_x.len() - 1) {
-                                let x_curr = plot_x + (s.data_x[k] - this.x_min) * x_scale;
-                                let x_next = plot_x + (s.data_x[k + 1] - this.x_min) * x_scale;
-                                let y_curr = plot_y + plot_height - ((s.data_y[k] - this.y_min) * y_scale);
-                                let y_next = plot_y + plot_height - ((s.data_y[k + 1] - this.y_min) * y_scale);
+                                let x_curr = if this.x_log_scale {
+                                    if s.data_x[k] <= 0.0 { continue; }
+                                    let log_min = x_min_val.log10();
+                                    let log_max = x_max_val.log10();
+                                    plot_x + ((s.data_x[k].log10() - log_min) / (log_max - log_min)) * plot_width
+                                } else {
+                                    plot_x + ((s.data_x[k] - x_min_val) / (x_max_val - x_min_val)) * plot_width
+                                };
+                                let x_next = if this.x_log_scale {
+                                    if s.data_x[k + 1] <= 0.0 { continue; }
+                                    let log_min = x_min_val.log10();
+                                    let log_max = x_max_val.log10();
+                                    plot_x + ((s.data_x[k + 1].log10() - log_min) / (log_max - log_min)) * plot_width
+                                } else {
+                                    plot_x + ((s.data_x[k + 1] - x_min_val) / (x_max_val - x_min_val)) * plot_width
+                                };
+                                let y_curr = if this.y_log_scale {
+                                    if s.data_y[k] <= 0.0 { continue; }
+                                    let log_min = y_min_val.log10();
+                                    let log_max = y_max_val.log10();
+                                    plot_y + plot_height - ((s.data_y[k].log10() - log_min) / (log_max - log_min)) * plot_height
+                                } else {
+                                    plot_y + plot_height - ((s.data_y[k] - y_min_val) / (y_max_val - y_min_val)) * plot_height
+                                };
+                                let y_next = if this.y_log_scale {
+                                    if s.data_y[k + 1] <= 0.0 { continue; }
+                                    let log_min = y_min_val.log10();
+                                    let log_max = y_max_val.log10();
+                                    plot_y + plot_height - ((s.data_y[k + 1].log10() - log_min) / (log_max - log_min)) * plot_height
+                                } else {
+                                    plot_y + plot_height - ((s.data_y[k + 1] - y_min_val) / (y_max_val - y_min_val)) * plot_height
+                                };
                                 // horizontal line at y_curr
                                 pinned_painter.as_mut().draw_line(x_curr, y_curr, x_next, y_curr);
                                 // vertical transition line at x_next
@@ -887,10 +993,40 @@ impl graph_object_qobject::GraphObject {
                         } else {
                             // analog: straight lines between points
                             for k in 0..(s.data_x.len() - 1) {
-                                let x1 = plot_x + (s.data_x[k] - this.x_min) * x_scale;
-                                let y1 = plot_y + plot_height - ((s.data_y[k] - this.y_min) * y_scale);
-                                let x2 = plot_x + (s.data_x[k + 1] - this.x_min) * x_scale;
-                                let y2 = plot_y + plot_height - ((s.data_y[k + 1] - this.y_min) * y_scale);
+                                if this.x_log_scale && (s.data_x[k] <= 0.0 || s.data_x[k + 1] <= 0.0) {
+                                    continue;
+                                }
+                                if this.y_log_scale && (s.data_y[k] <= 0.0 || s.data_y[k + 1] <= 0.0) {
+                                    continue;
+                                }
+                                let x1 = if this.x_log_scale {
+                                    let log_min = x_min_val.log10();
+                                    let log_max = x_max_val.log10();
+                                    plot_x + ((s.data_x[k].log10() - log_min) / (log_max - log_min)) * plot_width
+                                } else {
+                                    plot_x + ((s.data_x[k] - x_min_val) / (x_max_val - x_min_val)) * plot_width
+                                };
+                                let x2 = if this.x_log_scale {
+                                    let log_min = x_min_val.log10();
+                                    let log_max = x_max_val.log10();
+                                    plot_x + ((s.data_x[k + 1].log10() - log_min) / (log_max - log_min)) * plot_width
+                                } else {
+                                    plot_x + ((s.data_x[k + 1] - x_min_val) / (x_max_val - x_min_val)) * plot_width
+                                };
+                                let y1 = if this.y_log_scale {
+                                    let log_min = y_min_val.log10();
+                                    let log_max = y_max_val.log10();
+                                    plot_y + plot_height - ((s.data_y[k].log10() - log_min) / (log_max - log_min)) * plot_height
+                                } else {
+                                    plot_y + plot_height - ((s.data_y[k] - y_min_val) / (y_max_val - y_min_val)) * plot_height
+                                };
+                                let y2 = if this.y_log_scale {
+                                    let log_min = y_min_val.log10();
+                                    let log_max = y_max_val.log10();
+                                    plot_y + plot_height - ((s.data_y[k + 1].log10() - log_min) / (log_max - log_min)) * plot_height
+                                } else {
+                                    plot_y + plot_height - ((s.data_y[k + 1] - y_min_val) / (y_max_val - y_min_val)) * plot_height
+                                };
                                 pinned_painter.as_mut().draw_line(x1, y1, x2, y2);
                             }
                         }
@@ -899,8 +1035,22 @@ impl graph_object_qobject::GraphObject {
                     if s.marker {
                         let marker_size = 6.0;
                         for k in 0..s.data_x.len() {
-                            let x_pt = plot_x + (s.data_x[k] - this.x_min) * x_scale;
-                            let y_pt = plot_y + plot_height - ((s.data_y[k] - this.y_min) * y_scale);
+                            if this.x_log_scale && s.data_x[k] <= 0.0 { continue; }
+                            if this.y_log_scale && s.data_y[k] <= 0.0 { continue; }
+                            let x_pt = if this.x_log_scale {
+                                let log_min = x_min_val.log10();
+                                let log_max = x_max_val.log10();
+                                plot_x + ((s.data_x[k].log10() - log_min) / (log_max - log_min)) * plot_width
+                            } else {
+                                plot_x + ((s.data_x[k] - x_min_val) / (x_max_val - x_min_val)) * plot_width
+                            };
+                            let y_pt = if this.y_log_scale {
+                                let log_min = y_min_val.log10();
+                                let log_max = y_max_val.log10();
+                                plot_y + plot_height - ((s.data_y[k].log10() - log_min) / (log_max - log_min)) * plot_height
+                            } else {
+                                plot_y + plot_height - ((s.data_y[k] - y_min_val) / (y_max_val - y_min_val)) * plot_height
+                            };
                             let rect = QRectF::new(x_pt - marker_size / 2.0, y_pt - marker_size / 2.0, marker_size, marker_size);
                             pinned_painter.as_mut().draw_ellipse(&rect);
                         }
@@ -921,16 +1071,56 @@ impl graph_object_qobject::GraphObject {
                     let max_val = s.data_y.iter().fold(f64::NEG_INFINITY, |a, &b| a.max(b));
                     let local_min = if min_val == max_val { min_val - 0.5 } else { min_val };
                     let local_max = if min_val == max_val { max_val + 0.5 } else { max_val };
+                    let (local_min_val, local_max_val) = if this.y_log_scale {
+                        if local_max <= 0.0 {
+                            (0.1, 1.0)
+                        } else {
+                            let loc_min = if local_min > 0.0 { local_min } else { (local_max / 1e6).max(1e-9) };
+                            (loc_min, local_max)
+                        }
+                    } else {
+                        (local_min, local_max)
+                    };
                     // Scale factors
                     let x_scale = plot_width / (this.x_max - this.x_min);
-                    let y_scale_local = band_height / (local_max - local_min);
+                    let y_scale_local = if this.y_log_scale {
+                        (band_height / ((local_max_val).log10() - (local_min_val).log10()).max(1e-9))
+                    } else {
+                        band_height / (local_max_val - local_min_val)
+                    };
                     if s.data_x.len() > 1 {
                         if s.is_digital {
                             for k in 0..(s.data_x.len() - 1) {
-                                let x_curr = plot_x + (s.data_x[k] - this.x_min) * x_scale;
-                                let x_next = plot_x + (s.data_x[k + 1] - this.x_min) * x_scale;
-                                let y_curr = band_bottom_y - ((s.data_y[k] - local_min) * y_scale_local);
-                                let y_next = band_bottom_y - ((s.data_y[k + 1] - local_min) * y_scale_local);
+                                if this.x_log_scale && (s.data_x[k] <= 0.0 || s.data_x[k + 1] <= 0.0) {
+                                    continue;
+                                }
+                                if this.y_log_scale && (s.data_y[k] <= 0.0 || s.data_y[k + 1] <= 0.0) {
+                                    continue;
+                                }
+                                let x_curr = if this.x_log_scale {
+                                    let log_min = x_min_val.log10();
+                                    let log_max = x_max_val.log10();
+                                    plot_x + ((s.data_x[k].log10() - log_min) / (log_max - log_min)) * plot_width
+                                } else {
+                                    plot_x + ((s.data_x[k] - this.x_min) / (this.x_max - this.x_min)) * plot_width
+                                };
+                                let x_next = if this.x_log_scale {
+                                    let log_min = x_min_val.log10();
+                                    let log_max = x_max_val.log10();
+                                    plot_x + ((s.data_x[k + 1].log10() - log_min) / (log_max - log_min)) * plot_width
+                                } else {
+                                    plot_x + ((s.data_x[k + 1] - this.x_min) / (this.x_max - this.x_min)) * plot_width
+                                };
+                                let y_curr = if this.y_log_scale {
+                                    band_bottom_y - ((s.data_y[k].log10() - local_min_val.log10()) * y_scale_local)
+                                } else {
+                                    band_bottom_y - ((s.data_y[k] - local_min_val) * y_scale_local)
+                                };
+                                let y_next = if this.y_log_scale {
+                                    band_bottom_y - ((s.data_y[k + 1].log10() - local_min_val.log10()) * y_scale_local)
+                                } else {
+                                    band_bottom_y - ((s.data_y[k + 1] - local_min_val) * y_scale_local)
+                                };
                                 pinned_painter.as_mut().draw_line(x_curr, y_curr, x_next, y_curr);
                                 if (s.data_y[k] - s.data_y[k + 1]).abs() > f64::EPSILON {
                                     pinned_painter.as_mut().draw_line(x_next, y_curr, x_next, y_next);
@@ -938,10 +1128,36 @@ impl graph_object_qobject::GraphObject {
                             }
                         } else {
                             for k in 0..(s.data_x.len() - 1) {
-                                let x1 = plot_x + (s.data_x[k] - this.x_min) * x_scale;
-                                let y1 = band_bottom_y - ((s.data_y[k] - local_min) * y_scale_local);
-                                let x2 = plot_x + (s.data_x[k + 1] - this.x_min) * x_scale;
-                                let y2 = band_bottom_y - ((s.data_y[k + 1] - local_min) * y_scale_local);
+                                if this.x_log_scale && (s.data_x[k] <= 0.0 || s.data_x[k + 1] <= 0.0) {
+                                    continue;
+                                }
+                                if this.y_log_scale && (s.data_y[k] <= 0.0 || s.data_y[k + 1] <= 0.0) {
+                                    continue;
+                                }
+                                let x1 = if this.x_log_scale {
+                                    let log_min = x_min_val.log10();
+                                    let log_max = x_max_val.log10();
+                                    plot_x + ((s.data_x[k].log10() - log_min) / (log_max - log_min)) * plot_width
+                                } else {
+                                    plot_x + ((s.data_x[k] - this.x_min) / (this.x_max - this.x_min)) * plot_width
+                                };
+                                let x2 = if this.x_log_scale {
+                                    let log_min = x_min_val.log10();
+                                    let log_max = x_max_val.log10();
+                                    plot_x + ((s.data_x[k + 1].log10() - log_min) / (log_max - log_min)) * plot_width
+                                } else {
+                                    plot_x + ((s.data_x[k + 1] - this.x_min) / (this.x_max - this.x_min)) * plot_width
+                                };
+                                let y1 = if this.y_log_scale {
+                                    band_bottom_y - ((s.data_y[k].log10() - local_min_val.log10()) * y_scale_local)
+                                } else {
+                                    band_bottom_y - ((s.data_y[k] - local_min_val) * y_scale_local)
+                                };
+                                let y2 = if this.y_log_scale {
+                                    band_bottom_y - ((s.data_y[k + 1].log10() - local_min_val.log10()) * y_scale_local)
+                                } else {
+                                    band_bottom_y - ((s.data_y[k + 1] - local_min_val) * y_scale_local)
+                                };
                                 pinned_painter.as_mut().draw_line(x1, y1, x2, y2);
                             }
                         }
@@ -949,8 +1165,20 @@ impl graph_object_qobject::GraphObject {
                     if s.marker {
                         let marker_size = 6.0;
                         for k in 0..s.data_x.len() {
-                            let x_pt = plot_x + (s.data_x[k] - this.x_min) * x_scale;
-                            let y_pt = band_bottom_y - ((s.data_y[k] - local_min) * y_scale_local);
+                            if this.x_log_scale && s.data_x[k] <= 0.0 { continue; }
+                            if this.y_log_scale && s.data_y[k] <= 0.0 { continue; }
+                            let x_pt = if this.x_log_scale {
+                                let log_min = x_min_val.log10();
+                                let log_max = x_max_val.log10();
+                                plot_x + ((s.data_x[k].log10() - log_min) / (log_max - log_min)) * plot_width
+                            } else {
+                                plot_x + ((s.data_x[k] - this.x_min) / (this.x_max - this.x_min)) * plot_width
+                            };
+                            let y_pt = if this.y_log_scale {
+                                band_bottom_y - ((s.data_y[k].log10() - local_min_val.log10()) * y_scale_local)
+                            } else {
+                                band_bottom_y - ((s.data_y[k] - local_min_val) * y_scale_local)
+                            };
                             let rect = QRectF::new(x_pt - marker_size / 2.0, y_pt - marker_size / 2.0, marker_size, marker_size);
                             pinned_painter.as_mut().draw_ellipse(&rect);
                         }
@@ -1004,16 +1232,28 @@ impl graph_object_qobject::GraphObject {
             pinned_painter.as_mut().set_pen(&axis_color, 1.0, 2);
             // Vertical cursors
             for x_val in &this.cursor_x_positions {
-                if *x_val >= this.x_min && *x_val <= this.x_max {
-                    let x_pix = plot_x + ((*x_val - this.x_min) / (this.x_max - this.x_min)) * plot_width;
+                if *x_val >= x_min_val && *x_val <= x_max_val && (!this.x_log_scale || *x_val > 0.0) {
+                    let x_pix = if this.x_log_scale {
+                        let log_min = x_min_val.log10();
+                        let log_max = x_max_val.log10();
+                        plot_x + ((*x_val).log10() - log_min) / (log_max - log_min) * plot_width
+                    } else {
+                        plot_x + ((*x_val - x_min_val) / (x_max_val - x_min_val)) * plot_width
+                    };
                     pinned_painter.as_mut().draw_line(x_pix, plot_y, x_pix, plot_y + plot_height);
                 }
             }
             // Horizontal cursors (if not separate series)
             if !this.separate_series {
                 for y_val in &this.cursor_y_positions {
-                    if *y_val >= this.y_min && *y_val <= this.y_max {
-                        let y_pix = plot_y + plot_height - ((*y_val - this.y_min) / (this.y_max - this.y_min)) * plot_height;
+                    if *y_val >= y_min_val && *y_val <= y_max_val && (!this.y_log_scale || *y_val > 0.0) {
+                        let y_pix = plot_y + plot_height - (if this.y_log_scale {
+                            let log_min = y_min_val.log10();
+                            let log_max = y_max_val.log10();
+                            ((*y_val).log10() - log_min) / (log_max - log_min) * plot_height
+                        } else {
+                            ((*y_val - y_min_val) / (y_max_val - y_min_val)) * plot_height
+                        });
                         pinned_painter.as_mut().draw_line(plot_x, y_pix, plot_x + plot_width, y_pix);
                     }
                 }
@@ -1021,24 +1261,44 @@ impl graph_object_qobject::GraphObject {
             // Cursor difference labels
             pinned_painter.as_mut().set_pen(&axis_color, 0.0, 1);
             if this.cursor_x_positions.len() == 2 {
-                let dx = (this.cursor_x_positions[1] - this.cursor_x_positions[0]).abs();
-                let label = QString::from(&format!("ΔX: {}", self.as_ref().format_value(dx).to_string()));
-                let text_width = label.to_string().len() as f64 * 7.0;
-                let text_x = plot_x + plot_width / 2.0 - text_width / 2.0;
-                let text_y = plot_y + 15.0;
-                pinned_painter.as_mut().draw_text(text_x, text_y, &label);
+                let x1 = this.cursor_x_positions[0];
+                let x2 = this.cursor_x_positions[1];
+                if !(this.x_log_scale && (x1 <= 0.0 || x2 <= 0.0)) {
+                    let dx = (x2 - x1).abs();
+                    let label = QString::from(&format!("ΔX: {}", self.as_ref().format_value(dx).to_string()));
+                    let text_width = label.to_string().len() as f64 * 7.0;
+                    let text_x = plot_x + plot_width / 2.0 - text_width / 2.0;
+                    let text_y = plot_y + 15.0;
+                    pinned_painter.as_mut().draw_text(text_x, text_y, &label);
+                }
             }
             if !this.separate_series && this.cursor_y_positions.len() == 2 {
-                let dy = (this.cursor_y_positions[1] - this.cursor_y_positions[0]).abs();
-                let label = QString::from(&format!("ΔY: {}", self.as_ref().format_value(dy).to_string()));
-                let text_x = plot_x + 10.0;
-                let mid_y = {
-                    let y1_pix = plot_y + plot_height - ((this.cursor_y_positions[0] - this.y_min) / (this.y_max - this.y_min)) * plot_height;
-                    let y2_pix = plot_y + plot_height - ((this.cursor_y_positions[1] - this.y_min) / (this.y_max - this.y_min)) * plot_height;
-                    (y1_pix + y2_pix) / 2.0
-                };
-                let text_y = mid_y + 4.0;
-                pinned_painter.as_mut().draw_text(text_x, text_y, &label);
+                let y1 = this.cursor_y_positions[0];
+                let y2 = this.cursor_y_positions[1];
+                if !(this.y_log_scale && (y1 <= 0.0 || y2 <= 0.0)) {
+                    let dy = (y2 - y1).abs();
+                    let label = QString::from(&format!("ΔY: {}", self.as_ref().format_value(dy).to_string()));
+                    let text_x = plot_x + 10.0;
+                    let mid_y = {
+                        let y1_pix = plot_y + plot_height - (if this.y_log_scale {
+                            let log_min = y_min_val.log10();
+                            let log_max = y_max_val.log10();
+                            ((y1).log10() - log_min) / (log_max - log_min) * plot_height
+                        } else {
+                            ((y1 - y_min_val) / (y_max_val - y_min_val)) * plot_height
+                        });
+                        let y2_pix = plot_y + plot_height - (if this.y_log_scale {
+                            let log_min = y_min_val.log10();
+                            let log_max = y_max_val.log10();
+                            ((y2).log10() - log_min) / (log_max - log_min) * plot_height
+                        } else {
+                            ((y2 - y_min_val) / (y_max_val - y_min_val)) * plot_height
+                        });
+                        (y1_pix + y2_pix) / 2.0
+                    };
+                    let text_y = mid_y + 4.0;
+                    pinned_painter.as_mut().draw_text(text_x, text_y, &label);
+                }
             }
         }
     }
