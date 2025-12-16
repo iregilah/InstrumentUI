@@ -116,10 +116,10 @@ pub mod graph_object_qobject {
         include!("graph_object_helpers.h");
         #[namespace = "graph_object_helpers"]
         #[rust_name = "helpers_grab_image"]
-        fn grab_image(item: *mut GraphObject) -> UniquePtr<QImage>;
+        unsafe fn grab_image(item: *mut GraphObject) -> UniquePtr<QImage>;
         #[namespace = "graph_object_helpers"]
         #[rust_name = "helpers_save_image"]
-        fn save_image(item: *mut GraphObject, file_path: &QString) -> bool;
+        unsafe fn save_image(item: *mut GraphObject, file_path: &QString) -> bool;
     }
 
     extern "RustQt" {
@@ -355,7 +355,7 @@ impl graph_object_qobject::GraphObject {
             }
         }
         */
-        let img = graph_object_qobject::helpers_grab_image(self.as_mut().cpp_mut());
+        let img = unsafe { graph_object_qobject::helpers_grab_image(self.as_mut().cpp_mut()) };
         unsafe {
             if let Some(cb) = clipboard_ptr.as_mut() {
                 let mut pinned_cb = Pin::new_unchecked(cb);
@@ -392,7 +392,7 @@ impl graph_object_qobject::GraphObject {
             save_path.push_str(".png");
         }
         let qstr = QString::from(&save_path);
-        let _ = graph_object_qobject::helpers_save_image(self.as_mut().cpp_mut(), &qstr);
+        let _ = unsafe { graph_object_qobject::helpers_save_image(self.as_mut().cpp_mut(), &qstr) };
     }
     pub fn place_vertical_cursor(mut self: Pin<&mut Self>, x: f64) {
         let this = self.as_mut().rust_mut();
