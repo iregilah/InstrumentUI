@@ -1,9 +1,9 @@
 // src/graph_object.rs
 use cxx_qt::{CxxQtType, Threading};
-use cxx_qt_lib::{QColor, QRectF, QSizeF, QString};
+use cxx_qt_lib::{QColor, QRectF, QSizeF, QString, QPen, PenStyle};
 use std::pin::Pin;
 
-#[cxx_qt::bridge]
+#[cxx_qt::bridge(cxx_file_stem = "graph_object")]
 pub mod graph_object_qobject {
     unsafe extern "C++" {
         include!("cxx-qt-lib/qcolor.h");
@@ -19,8 +19,6 @@ pub mod graph_object_qobject {
     unsafe extern "C++" {
         include!(<QtGui/QPainter>);
         type QPainter;
-        #[rust_name = "set_pen"]
-        fn setPen(self: Pin<&mut QPainter>, color: &QColor, width: f64, style: i32);
         #[rust_name = "draw_line"]
         fn drawLine(self: Pin<&mut QPainter>, x1: f64, y1: f64, x2: f64, y2: f64);
         #[rust_name = "draw_text"]
@@ -31,6 +29,13 @@ pub mod graph_object_qobject {
         fn setRenderHint(self: Pin<&mut QPainter>, hint: i32, enabled: bool);
         #[rust_name = "fill_rect"]
         fn fillRect(self: Pin<&mut QPainter>, rect: &QRectF, color: &QColor);
+    }
+
+    unsafe extern "C++" {
+        include!(<QtGui/QPen>);
+        type QPen;
+        #[rust_name = "set_pen_with_pen"]
+        fn setPen(self: Pin<&mut QPainter>, pen: &QPen);
     }
     unsafe extern "C++" {
         include!(<QtGui/QImage>);
@@ -54,11 +59,21 @@ pub mod graph_object_qobject {
         #[rust_name = "graphobject_to_qpainteditem"]
         fn static_cast_QQuickPaintedItem(ptr: *mut GraphObject) -> *mut QQuickPaintedItem;
     }
+    unsafe extern "C++" {
+        include!(<QtQuick/QQuickItemGrabResult>);
+        type QQuickItemGrabResult;
+        #[rust_name = "grab_to_image_item"]
+        fn grabToImage(self: Pin<&mut QQuickPaintedItem>) -> *mut QQuickItemGrabResult;
+        #[rust_name = "result_image"]
+        fn image(self: &QQuickItemGrabResult) -> QImage;
+        #[rust_name = "result_save_to_file"]
+        fn saveToFile(self: &QQuickItemGrabResult, file: &QString) -> bool;
+    }
 
     extern "RustQt" {
         #[qobject]
         #[qml_element]
-        #[base = "QQuickPaintedItem"]
+        #[base = QQuickPaintedItem]
         #[qproperty(bool, legend_visible, cxx_name = "legendVisible")]
         #[qproperty(int, legend_position, cxx_name = "legendPosition")]
         #[qproperty(bool, grid_visible, cxx_name = "gridVisible")]
@@ -101,6 +116,8 @@ pub mod graph_object_qobject {
         #[qinvokable]
         fn save_csv(self: Pin<&mut GraphObject>, file_path: &QString);
         #[qinvokable]
+        fn save_image(self: Pin<&mut GraphObject>, file_path: &QString);
+        #[qinvokable]
         fn copy_data(self: Pin<&mut GraphObject>);
         #[qinvokable]
         fn copy_image(self: Pin<&mut GraphObject>);
@@ -112,6 +129,10 @@ pub mod graph_object_qobject {
         fn clear_cursors(self: Pin<&mut GraphObject>);
         #[qinvokable]
         fn request_repaint(self: Pin<&mut GraphObject>);
+        #[inherit]
+        fn update(self: Pin<&mut GraphObject>);
+        #[inherit]
+        fn size(self: &GraphObject) -> QSizeF;
         #[cxx_override]
         unsafe fn paint(self: Pin<&mut GraphObject>, painter: *mut QPainter);
     }
@@ -260,7 +281,7 @@ impl graph_object_qobject::GraphObject {
     }
     pub fn copy_data(mut self: Pin<&mut Self>) {
         let this = self.as_ref().rust();
-        let clipboard_ptr = clipboard();
+        let clipboard_ptr = graph_object_qobject::clipboard();
         if !clipboard_ptr.is_null() {
             let mut pinned_cb = unsafe { Pin::new_unchecked(&mut *clipboard_ptr) };
             let mut csv = String::new();
@@ -279,7 +300,7 @@ impl graph_object_qobject::GraphObject {
         }
     }
     pub fn copy_image(mut self: Pin<&mut Self>) {
-        let clipboard_ptr = clipboard();
+        let clipboard_ptr = graph_object_qobject::clipboard();
         if clipboard_ptr.is_null() {
             return;
         }
@@ -287,7 +308,7 @@ impl graph_object_qobject::GraphObject {
             if let Some(cb) = clipboard_ptr.as_mut() {
                 let mut pinned_cb = Pin::new_unchecked(cb);
                 // Attempt to grab image from QQuickPaintedItem
-                let raw_ptr = static_cast_QQuickPaintedItem(self.as_mut().cpp_mut());
+                let raw_ptr = graph_object_qobject::static_cast_QQuickPaintedItem(self.as_mut().cpp_mut());
                 if !raw_ptr.is_null() {
                     let grab_result = Pin::new_unchecked(&mut *raw_ptr).grab_to_image_item();
                     if !grab_result.is_null() {
@@ -299,6 +320,24 @@ impl graph_object_qobject::GraphObject {
                 // Fallback: copy placeholder text if image not captured
                 let msg = QString::from("[Image Data]");
                 pinned_cb.as_mut().clipboard_set_text(&msg);
+            }
+        }
+    }
+
+    pub fn save_image(mut self: Pin<&mut Self>, file_path: &QString) {
+        let raw_ptr = graph_object_qobject::static_cast_QQuickPaintedItem(self.as_mut().cpp_mut());
+        if raw_ptr.is_null() {
+            return;
+        }
+        unsafe {
+            let grab_result = Pin::new_unchecked(&mut *raw_ptr).grab_to_image_item();
+            if !grab_result.is_null() {
+                let mut save_path = file_path.to_string();
+                if !save_path.ends_with(".png") && !save_path.ends_with(".jpg") && !save_path.ends_with(".bmp") {
+                    save_path.push_str(".png");
+                }
+                let qstr = QString::from(&save_path);
+                (*grab_result).result_save_to_file(&qstr);
             }
         }
     }
@@ -783,7 +822,12 @@ impl graph_object_qobject::GraphObject {
             let axis_color = if this.dark_mode { QColor::from_rgb(255, 255, 255) } else { QColor::from_rgb(0, 0, 0) };
             let grid_color = if this.dark_mode { QColor::from_rgb(136, 136, 136) } else { QColor::from_rgb(136, 136, 136) };
             // Draw vertical grid lines and vertical (Y) axis line
-            pinned_painter.as_mut().set_pen(&grid_color, 0.0, if this.grid_visible { 2 } else { 1 });
+            let mut grid_pen = QPen::default();
+                    grid_pen.set_color(&grid_color);
+                    grid_pen.set_width(0);
+                    let grid_pen_style = if this.grid_visible { PenStyle::DashLine } else { PenStyle::SolidLine };
+                    grid_pen.set_style(grid_pen_style);
+                    pinned_painter.as_mut().set_pen_with_pen(&grid_pen);
             let num_x_ticks = 5;
             for i in 0..num_x_ticks {
                 let t = i as f64 / (num_x_ticks - 1) as f64;
@@ -807,10 +851,19 @@ impl graph_object_qobject::GraphObject {
                 }
             }
             // Vertical axis line (left)
-            pinned_painter.as_mut().set_pen(&axis_color, 0.0, 1);
+            let mut axis_pen = QPen::default();
+                    axis_pen.set_color(&axis_color);
+                    axis_pen.set_width(0);
+                    axis_pen.set_style(PenStyle::SolidLine);
+                    pinned_painter.as_mut().set_pen_with_pen(&axis_pen);
             pinned_painter.as_mut().draw_line(y_axis_x, plot_y, y_axis_x, plot_y + plot_height);
             // Draw horizontal grid lines and horizontal (X) axis line
-            pinned_painter.as_mut().set_pen(&grid_color, 0.0, if this.grid_visible { 2 } else { 1 });
+            let mut grid_pen2 = QPen::default();
+                    grid_pen2.set_color(&grid_color);
+                    grid_pen2.set_width(0);
+                    let grid_pen2_style = if this.grid_visible { PenStyle::DashLine } else { PenStyle::SolidLine };
+                    grid_pen2.set_style(grid_pen2_style);
+                    pinned_painter.as_mut().set_pen_with_pen(&grid_pen2);
             let num_y_ticks = 5;
             for j in 0..num_y_ticks {
                 let t = j as f64 / (num_y_ticks - 1) as f64;
@@ -834,10 +887,18 @@ impl graph_object_qobject::GraphObject {
                 }
             }
             // Horizontal axis line (bottom)
-            pinned_painter.as_mut().set_pen(&axis_color, 0.0, 1);
+            let mut axis_pen2 = QPen::default();
+                    axis_pen2.set_color(&axis_color);
+                    axis_pen2.set_width(0);
+                    axis_pen2.set_style(PenStyle::SolidLine);
+                    pinned_painter.as_mut().set_pen_with_pen(&axis_pen2);
             pinned_painter.as_mut().draw_line(plot_x, x_axis_y, plot_x + plot_width, x_axis_y);
             // Draw tick marks and labels
-            pinned_painter.as_mut().set_pen(&axis_color, 0.0, 1);
+            let mut axis_pen3 = QPen::default();
+                    axis_pen3.set_color(&axis_color);
+                    axis_pen3.set_width(0);
+                    axis_pen3.set_style(PenStyle::SolidLine);
+                    pinned_painter.as_mut().set_pen_with_pen(&axis_pen3);
             // X-axis ticks and labels
             for i in 0..num_x_ticks {
                 let t = i as f64 / (num_x_ticks - 1) as f64;
@@ -943,8 +1004,20 @@ impl graph_object_qobject::GraphObject {
                     continue;
                 }
                 // Choose pen for series (color, thickness, style)
-                let style_val = if s.line_stararyle <= 0 { 1 } else { s.line_style };
-                pinned_painter.as_mut().set_pen(&s.color, s.thickness, style_val);
+                let style_val = if s.line_style <= 0 { 1 } else { s.line_style };
+                         let mut pen = QPen::default();
+                         pen.set_color(&s.color);
+                         let width_i = if s.thickness <= 0.0 { 1 } else { s.thickness.round() as i32 };
+                         pen.set_width(width_i);
+                         let pen_style = match style_val {
+                             2 => PenStyle::DashLine,
+                            3 => PenStyle::DotLine,
+                             4 => PenStyle::DashDotLine,
+                             5 => PenStyle::DashDotDotLine,
+                             _ => PenStyle::SolidLine,
+                         };
+                         pen.set_style(pen_style);
+                         pinned_painter.as_mut().set_pen_with_pen(&pen);
                 if !this.separate_series {
                     // Draw connecting lines
                     if s.data_x.len() > 1 {
@@ -1220,16 +1293,28 @@ impl graph_object_qobject::GraphObject {
                 for (idx, s) in this.series_list.iter().enumerate() {
                     let text = QString::from(&s.name);
                     // Color sample (line or square)
-                    pinned_painter.as_mut().set_pen(&s.color, 2.0, 1);
+                    let mut legend_pen = QPen::default();
+                             legend_pen.set_color(&s.color);
+                             legend_pen.set_width(2);
+                             legend_pen.set_style(PenStyle::SolidLine);
+                             pinned_painter.as_mut().set_pen_with_pen(&legend_pen);
                     let line_y = legend_y + legend_padding + idx as f64 * entry_height + entry_height / 2.0;
                     pinned_painter.as_mut().draw_line(legend_x + 5.0, line_y, legend_x + 15.0, line_y);
                     // Text
-                    pinned_painter.as_mut().set_pen(&axis_color, 0.0, 1);
+                    let mut legend_text_pen = QPen::default();
+                             legend_text_pen.set_color(&axis_color);
+                             legend_text_pen.set_width(0);
+                             legend_text_pen.set_style(PenStyle::SolidLine);
+                             pinned_painter.as_mut().set_pen_with_pen(&legend_text_pen);
                     pinned_painter.as_mut().draw_text(legend_x + 20.0, legend_y + legend_padding + idx as f64 * entry_height + 10.0, &text);
                 }
             }
             // Draw cursor lines and differences
-            pinned_painter.as_mut().set_pen(&axis_color, 1.0, 2);
+            let mut cursor_pen = QPen::default();
+                     cursor_pen.set_color(&axis_color);
+                     cursor_pen.set_width(1);
+                     cursor_pen.set_style(PenStyle::DashLine);
+                     pinned_painter.as_mut().set_pen_with_pen(&cursor_pen);
             // Vertical cursors
             for x_val in &this.cursor_x_positions {
                 if *x_val >= x_min_val && *x_val <= x_max_val && (!this.x_log_scale || *x_val > 0.0) {
@@ -1259,7 +1344,11 @@ impl graph_object_qobject::GraphObject {
                 }
             }
             // Cursor difference labels
-            pinned_painter.as_mut().set_pen(&axis_color, 0.0, 1);
+            let mut diff_pen = QPen::default();
+                     diff_pen.set_color(&axis_color);
+                     diff_pen.set_width(0);
+                     diff_pen.set_style(PenStyle::SolidLine);
+                     pinned_painter.as_mut().set_pen_with_pen(&diff_pen);
             if this.cursor_x_positions.len() == 2 {
                 let x1 = this.cursor_x_positions[0];
                 let x2 = this.cursor_x_positions[1];
