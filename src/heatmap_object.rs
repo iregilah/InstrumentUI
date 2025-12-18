@@ -193,7 +193,8 @@ impl heatmap_qobject::HeatmapObject {
     unsafe fn paint(self: Pin<&mut Self>, painter: *mut heatmap_qobject::QPainter) {
         if let Some(painter) = painter.as_mut() {
             let mut pinned_painter = Pin::new_unchecked(painter);
-            let this = self.as_ref().rust();
+            let binding = self.as_ref();
+            let this = binding.rust();
             let mut draw_text = |p: &mut Pin<&mut heatmap_qobject::QPainter>, x: f64, y: f64, text: &QString| {
                 let pt = QPointF::new(x, y);
                 p.as_mut().draw_text(&pt, text);

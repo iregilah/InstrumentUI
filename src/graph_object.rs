@@ -898,7 +898,8 @@ impl graph_object_qobject::GraphObject {
     unsafe fn paint(self: Pin<&mut Self>, painter: *mut graph_object_qobject::QPainter) {
         if let Some(painter) = painter.as_mut() {
             let mut pinned_painter = Pin::new_unchecked(painter);
-            let this = self.as_ref().rust();
+            let binding = self.as_ref();
+            let this = binding.rust();
             // --- kis helperek, hogy ne kelljen mindenhol QPointF-et kézzel gyártani ---
             let mut draw_line = |p: &mut Pin<&mut graph_object_qobject::QPainter>,
                                  x1: f64, y1: f64, x2: f64, y2: f64| {
