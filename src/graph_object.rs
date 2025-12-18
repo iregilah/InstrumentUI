@@ -20,7 +20,7 @@ pub mod graph_object_qobject {
         type QPointF = cxx_qt_lib::QPointF;
         type QPen = cxx_qt_lib::QPen;
         include!(<QtQuick/QQuickPaintedItem>);
-                type QQuickPaintedItem;
+        type QQuickPaintedItem;
         include!(<QtQuick/QQuickItem>);
         type QQuickItem;
     }
@@ -284,7 +284,8 @@ impl graph_object_qobject::GraphObject {
 
     pub fn save_csv(mut self: Pin<&mut Self>, file_path: &QString) {
         use std::io::Write;
-        let this = self.as_ref().rust();
+        let binding = self.as_ref();
+        let this = binding.rust();
         if let Ok(mut file) = std::fs::File::create(std::path::Path::new(&file_path.to_string())) {
             for (i, s) in this.series_list.iter().enumerate() {
                 if i > 0 {
@@ -300,7 +301,8 @@ impl graph_object_qobject::GraphObject {
         }
     }
     pub fn copy_data(mut self: Pin<&mut Self>) {
-        let this = self.as_ref().rust();
+        let binding = self.as_ref();
+        let this = binding.rust();
         let mut csv = String::new();
         for (i, s) in this.series_list.iter().enumerate() {
             if i > 0 { csv.push('\n'); }
@@ -341,7 +343,7 @@ impl graph_object_qobject::GraphObject {
     }
 
     pub fn place_vertical_cursor(mut self: Pin<&mut Self>, x: f64) {
-        let this = self.as_mut().rust_mut();
+        let mut this = self.as_mut().rust_mut();
         if this.cursor_x_positions.len() < 2 {
             this.cursor_x_positions.push(x);
         } else {
@@ -351,7 +353,7 @@ impl graph_object_qobject::GraphObject {
         self.update();
     }
     pub fn place_horizontal_cursor(mut self: Pin<&mut Self>, y: f64) {
-        let this = self.as_mut().rust_mut();
+        let mut this = self.as_mut().rust_mut();
         if this.cursor_y_positions.len() < 2 {
             this.cursor_y_positions.push(y);
         } else {
@@ -361,7 +363,7 @@ impl graph_object_qobject::GraphObject {
         self.update();
     }
     pub fn clear_cursors(mut self: Pin<&mut Self>) {
-        let this = self.as_mut().rust_mut();
+        let mut this = self.as_mut().rust_mut();
         this.cursor_x_positions.clear();
         this.cursor_y_positions.clear();
         self.update();
@@ -371,300 +373,396 @@ impl graph_object_qobject::GraphObject {
         self.update();
     }
 
-    pub fn add_series(mut self: Pin<&mut Self>, name: &QString, series_type: i32, color: &QColor, thickness: f64, line_style: i32, marker: bool) {
-        let mut this = self.as_mut().rust_mut();
-        // Ensure unique name by removing any existing series with same name
-        this.series_list.retain(|s| s.name != name.to_string());
-        let is_digital = series_type == 2; // assume 0=analog, 1=int (treat as analog), 2=bool digital
-        let series = DataSeries {
-            name: name.to_string(),
-            is_digital,
-            color: color.clone(),
-            thickness: if thickness <= 0.0 { 1.0 } else { thickness },
-            line_style: if line_style < 0 { 1 } else { line_style },
-            marker,
-            data_x: Vec::new(),
-            data_y: Vec::new(),
-            min_y: 0.0,
-            max_y: 0.0,
-        };
-        this.series_list.push(series);
-        // Maybe update axes if auto-range (especially y-axis if adding digital series adjusts y range? For bool, 0-1)
-        if this.y_auto_range {
-            // Recompute global y range from all series data (likely empty new series so just consider existing)
-            let mut min_y = std::f64::MAX;
-            let mut max_y = std::f64::MIN;
-            for s in &this.series_list {
-                if !s.data_y.is_empty() {
-                    if s.min_y < min_y { min_y = s.min_y; }
-                    if s.max_y > max_y { max_y = s.max_y; }
+    pub fn add_series(
+        mut self: Pin<&mut Self>,
+        name: &QString,
+        series_type: i32,
+        color: &QColor,
+        thickness: f64,
+        line_style: i32,
+        marker: bool,
+    ) {
+        let name_str = name.to_string();
+
+        // E0499: ne hívjunk set_* metódusokat miközben él a rust_mut() kölcsönzés
+        let mut y_range_update: Option<(f64, f64)> = None;
+        let mut x_range_update: Option<(f64, f64)> = None;
+
+        {
+            let mut this = self.as_mut().rust_mut();
+
+            // Ensure unique name by removing any existing series with same name
+            this.series_list.retain(|s| s.name != name_str);
+            let is_digital = series_type == 2; // assume 0=analog, 1=int (treat as analog), 2=bool digital
+            let series = DataSeries {
+                name: name_str.clone(),
+                is_digital,
+                color: color.clone(),
+                thickness: if thickness <= 0.0 { 1.0 } else { thickness },
+                line_style: if line_style < 0 { 1 } else { line_style },
+                marker,
+                data_x: Vec::new(),
+                data_y: Vec::new(),
+                min_y: 0.0,
+                max_y: 0.0,
+            };
+            this.series_list.push(series);
+            // Update Y auto-range if enabled
+            if this.y_auto_range {
+                let mut min_y = f64::INFINITY;
+                let mut max_y = f64::NEG_INFINITY;
+                for s in &this.series_list {
+                    if !s.data_y.is_empty() {
+                        if s.min_y < min_y { min_y = s.min_y; }
+                        if s.max_y > max_y { max_y = s.max_y; }
+                    }
                 }
+                if !min_y.is_finite() {
+                    min_y = 0.0;
+                    max_y = 1.0;
+                } else if (min_y - max_y).abs() < f64::EPSILON {
+                    max_y = min_y + 1.0;
+                }
+                this.y_min = min_y;
+                this.y_max = max_y;
+                y_range_update = Some((min_y, max_y));
             }
-            if min_y == std::f64::MAX {
-                // no data in any series yet, just reset to 0..1 default
-                min_y = 0.0;
-                max_y = 1.0;
-            } else if min_y == max_y {
-                max_y = min_y + 1.0;
+
+            // If adding first series with no data, set some defaults for x axis (0..1)
+            if this.x_auto_range && this.series_list.len() == 1 && this.series_list[0].data_x.is_empty() {
+                this.x_min = 0.0;
+                this.x_max = 1.0;
+                x_range_update = Some((0.0, 1.0));
             }
-            this.y_min = min_y;
-            this.y_max = max_y;
-            self.as_mut().set_y_min(min_y);
-            self.as_mut().set_y_max(max_y);
         }
-        // If adding first series with no data, set some defaults for x axis as well (just dummy 0..1)
-        if this.x_auto_range && this.series_list.len() == 1 && this.series_list[0].data_x.is_empty() {
-            this.x_min = 0.0;
-            this.x_max = 1.0;
-            self.as_mut().set_x_min(0.0);
-            self.as_mut().set_x_max(1.0);
+        if let Some((ymin, ymax)) = y_range_update {
+            self.as_mut().set_y_min(ymin);
+            self.as_mut().set_y_max(ymax);
         }
-        self.update();  // trigger repaint
+        if let Some((xmin, xmax)) = x_range_update {
+            self.as_mut().set_x_min(xmin);
+            self.as_mut().set_x_max(xmax);
+        }
+
+        self.update();
     }
 
     pub fn remove_series(mut self: Pin<&mut Self>, name: &QString) {
-        let mut this = self.as_mut().rust_mut();
-        this.series_list.retain(|s| s.name != name.to_string());
-        // Recompute axes if needed
-        if this.x_auto_range || this.y_auto_range {
-            let mut new_x_min = std::f64::MAX;
-            let mut new_x_max = std::f64::MIN;
-            let mut new_y_min = std::f64::MAX;
-            let mut new_y_max = std::f64::MIN;
-            for s in &this.series_list {
-                if !s.data_x.is_empty() {
-                    let sx_min = *s.data_x.first().unwrap();
-                    let sx_max = *s.data_x.last().unwrap();
-                    if sx_min < new_x_min { new_x_min = sx_min; }
-                    if sx_max > new_x_max { new_x_max = sx_max; }
+        let name_str = name.to_string();
+
+        let mut x_range_update: Option<(f64, f64)> = None;
+        let mut y_range_update: Option<(f64, f64)> = None;
+
+        {
+            let mut this = self.as_mut().rust_mut();
+            this.series_list.retain(|s| s.name != name_str);
+
+            // Recompute axes if needed
+            if this.x_auto_range || this.y_auto_range {
+                let mut new_x_min = f64::INFINITY;
+                let mut new_x_max = f64::NEG_INFINITY;
+                let mut new_y_min = f64::INFINITY;
+                let mut new_y_max = f64::NEG_INFINITY;
+                for s in &this.series_list {
+                    if let (Some(first), Some(last)) = (s.data_x.first(), s.data_x.last()) {
+                        if *first < new_x_min { new_x_min = *first; }
+                        if *last > new_x_max { new_x_max = *last; }
+                    }
+                    if !s.data_y.is_empty() {
+                        if s.min_y < new_y_min { new_y_min = s.min_y; }
+                        if s.max_y > new_y_max { new_y_max = s.max_y; }
+                    }
                 }
-                if !s.data_y.is_empty() {
-                    if s.min_y < new_y_min { new_y_min = s.min_y; }
-                    if s.max_y > new_y_max { new_y_max = s.max_y; }
+                if !new_x_min.is_finite() || !new_x_max.is_finite() {
+                    new_x_min = 0.0;
+                    new_x_max = 1.0;
+                } else if (new_x_min - new_x_max).abs() < f64::EPSILON {
+                    new_x_max = new_x_min + 1.0;
                 }
-            }
-            if new_x_min == std::f64::MAX {
-                // no series or no data: reset to 0..1
-                new_x_min = 0.0;
-                new_x_max = 1.0;
-            } else if new_x_min == new_x_max {
-                new_x_max = new_x_min + 1.0;
-            }
-            if new_y_min == std::f64::MAX {
-                new_y_min = 0.0;
-                new_y_max = 1.0;
-            } else if new_y_min == new_y_max {
-                new_y_max = new_y_min + 1.0;
-            }
-            if this.x_auto_range {
-                this.x_min = new_x_min;
-                this.x_max = new_x_max;
-                self.as_mut().set_x_min(new_x_min);
-                self.as_mut().set_x_max(new_x_max);
-            }
-            if this.y_auto_range {
-                this.y_min = new_y_min;
-                this.y_max = new_y_max;
-                self.as_mut().set_y_min(new_y_min);
-                self.as_mut().set_y_max(new_y_max);
+
+                if !new_y_min.is_finite() || !new_y_max.is_finite() {
+                    new_y_min = 0.0;
+                    new_y_max = 1.0;
+                } else if (new_y_min - new_y_max).abs() < f64::EPSILON {
+                    new_y_max = new_y_min + 1.0;
+                }
+
+                if this.x_auto_range {
+                    this.x_min = new_x_min;
+                    this.x_max = new_x_max;
+                    x_range_update = Some((new_x_min, new_x_max));
+                }
+                if this.y_auto_range {
+                    this.y_min = new_y_min;
+                    this.y_max = new_y_max;
+                    y_range_update = Some((new_y_min, new_y_max));
+                }
             }
         }
+        if let Some((xmin, xmax)) = x_range_update {
+            self.as_mut().set_x_min(xmin);
+            self.as_mut().set_x_max(xmax);
+        }
+        if let Some((ymin, ymax)) = y_range_update {
+            self.as_mut().set_y_min(ymin);
+            self.as_mut().set_y_max(ymax);
+        }
+
         self.update();
     }
 
     pub fn add_data_point(mut self: Pin<&mut Self>, series_name: &QString, x: f64, y: f64) {
-        let mut this = self.as_mut().rust_mut();
-        if let Some(series) = this.series_list.iter_mut().find(|s| s.name == series_name.to_string()) {
+        let series_name_str = series_name.to_string();
+
+        // E0499/E0502: a rust_mut() kölcsönzés alatt ne hívjunk set_* metódusokat és ne tartsunk
+        // élő mutable borrow-ot egyetlen series-re, miközben a teljes listát bejárjuk.
+        let mut x_range_update: Option<(f64, f64)> = None;
+        let mut y_range_update: Option<(f64, f64)> = None;
+
+        {
+            let mut this = self.as_mut().rust_mut();
+
+            let idx = match this.series_list.iter().position(|s| s.name == series_name_str) {
+                Some(i) => i,
+                None => return,
+            };
+
             let px = x;
-            let py = if series.is_digital {
-                // For digital, treat value >0 as 1, else 0 (just in case)
+            let is_digital = this.series_list[idx].is_digital;
+            let py = if is_digital {
                 if y > 0.5 { 1.0 } else { 0.0 }
             } else {
                 y
             };
-            // Append new data point
-            series.data_x.push(px);
-            series.data_y.push(py);
-            // Update series min/max for this series
-            if series.data_y.len() == 1 {
-                series.min_y = py;
-                series.max_y = py;
-            } else {
-                if py < series.min_y { series.min_y = py; }
-                if py > series.max_y { series.max_y = py; }
+
+            // Push the new point
+            {
+                let series = &mut this.series_list[idx];
+                series.data_x.push(px);
+                series.data_y.push(py);
+
+                if series.data_y.len() == 1 {
+                    series.min_y = py;
+                    series.max_y = py;
+                } else {
+                    if py < series.min_y { series.min_y = py; }
+                    if py > series.max_y { series.max_y = py; }
+                }
             }
-            // If x_auto_range:
+
+            // X auto range + modes
             if this.x_auto_range {
                 if !this.initial_x_set {
-                    // first data point in graph
                     this.initial_x_set = true;
                     this.x_min = px;
                 }
-                if this.mode == 0 {
-                    // Mode1: compress, keep earliest x_min, extend x_max
-                    if px > this.x_max {
-                        this.x_max = px;
-                    }
-                } else if this.mode == 1 {
-                    // Mode2: scrolling window
-                    // Remove old points if beyond buffer
-                    let buf = if this.buffer_size < 1 { 1 } else { this.buffer_size } as usize;
-                    if series.data_x.len() > buf {
-                        // How many to drop? just 1 (we can drop one at a time)
-                        let drop_count = series.data_x.len() - buf;
-                        // Remove from front of this series
-                        series.data_x.drain(0..drop_count);
-                        series.data_y.drain(0..drop_count);
-                        // Also for all other series, if they have more points than buf, drop same count to align
-                        for s2 in this.series_list.iter_mut() {
-                            if s2.name != series.name && s2.data_x.len() > buf {
-                                let remove = if s2.data_x.len() >= drop_count { drop_count } else { s2.data_x.len() };
-                                s2.data_x.drain(0..remove);
-                                s2.data_y.drain(0..remove);
-                            }
-                        }
-                    }
-                    // After dropping, update x range to show last buffer_size points
-                    // Determine global min and max x from series
-                    let mut xmin_all = std::f64::MAX;
-                    let mut xmax_all = std::f64::MIN;
-                    for s2 in &this.series_list {
-                        if !s2.data_x.is_empty() {
-                            let sxmin = *s2.data_x.first().unwrap();
-                            let sxmax = *s2.data_x.last().unwrap();
-                            if sxmin < xmin_all { xmin_all = sxmin; }
-                            if sxmax > xmax_all { xmax_all = sxmax; }
-                        }
-                    }
-                    if xmin_all == std::f64::MAX {
-                        xmin_all = this.x_min;
-                    }
-                    if xmax_all == std::f64::MIN {
-                        xmax_all = this.x_max;
-                    }
-                    this.x_min = xmin_all;
-                    this.x_max = xmax_all;
-                } else if this.mode == 2 {
-                    // Mode3: triggered - when buffer full, reset (clear data)
-                    let buf = if this.buffer_size < 1 { 1 } else { this.buffer_size } as usize;
-                    if series.data_x.len() > buf {
-                        // Trigger event: buffer full
-                        let new_point_x = px;
-                        let new_point_y = py;
-                        // Calculate last frame span if we had one
-                        if series.data_x.len() >= buf {
-                            // span = x_range of this series for full frame
-                            let first_x = series.data_x.first().cloned().unwrap_or(new_point_x);
-                            let last_x = series.data_x.last().cloned().unwrap_or(new_point_x);
-                            this.last_frame_span = Some(last_x - first_x);
-                        }
-                        // Clear all series data
-                        for s2 in this.series_list.iter_mut() {
-                            s2.data_x.clear();
-                            s2.data_y.clear();
-                            s2.min_y = 0.0;
-                            s2.max_y = 0.0;
-                        }
-                        // Start new frame with the current point for this series
-                        series.data_x.push(new_point_x);
-                        series.data_y.push(new_point_y);
-                        series.min_y = new_point_y;
-                        series.max_y = new_point_y;
-                        // Adjust x axis range to new frame
-                        if let Some(span) = this.last_frame_span {
-                            this.x_min = new_point_x;
-                            this.x_max = new_point_x + span;
-                        } else {
-                            // if unknown span, just set a default range of buffer_size points
-                            this.x_min = new_point_x;
-                            this.x_max = new_point_x + this.buffer_size as f64;
-                        }
-                    } else {
-                        // If buffer not yet full, update x_max normally
-                        if px > this.x_max || this.x_min > this.x_max {
-                            // if x_min not set properly or px beyond
+
+                match this.mode {
+                    // Mode 0: compress
+                    0 => {
+                        if px > this.x_max {
                             this.x_max = px;
-                            if !this.initial_x_set {
-                                this.initial_x_set = true;
-                                this.x_min = px;
+                        }
+                    }
+                    // Mode 1: scroll (keep last buffer_size points)
+                    1 => {
+                        let buf = this.buffer_size.max(1) as usize;
+
+                        // Trim every series to the last `buf` points
+                        for s2 in this.series_list.iter_mut() {
+                            if s2.data_x.len() > buf {
+                                let drop = s2.data_x.len() - buf;
+                                s2.data_x.drain(0..drop);
+                                s2.data_y.drain(0..drop);
+
+                                // recompute per-series min/max (dropped points could invalidate cached min/max)
+                                if s2.data_y.is_empty() {
+                                    s2.min_y = 0.0;
+                                    s2.max_y = 0.0;
+                                } else {
+                                    let mut s_min = f64::INFINITY;
+                                    let mut s_max = f64::NEG_INFINITY;
+                                    for &vy in &s2.data_y {
+                                        if vy < s_min { s_min = vy; }
+                                        if vy > s_max { s_max = vy; }
+                                    }
+                                    s2.min_y = s_min;
+                                    s2.max_y = s_max;
+                                }
+                            }
+                        }
+
+                        // Recompute global x range
+                        let mut xmin_all = f64::INFINITY;
+                        let mut xmax_all = f64::NEG_INFINITY;
+                        for s2 in &this.series_list {
+                            if let (Some(first), Some(last)) = (s2.data_x.first(), s2.data_x.last()) {
+                                if *first < xmin_all { xmin_all = *first; }
+                                if *last > xmax_all { xmax_all = *last; }
+                            }
+                        }
+                        if !xmin_all.is_finite() { xmin_all = this.x_min; }
+                        if !xmax_all.is_finite() { xmax_all = this.x_max; }
+
+                        this.x_min = xmin_all;
+                        this.x_max = xmax_all;
+                    }
+                    // Mode 2: triggered
+                    2 => {
+                        let buf = this.buffer_size.max(1) as usize;
+                        let series_len = this.series_list[idx].data_x.len();
+
+                        if series_len > buf {
+                            // span from the (overflowing) frame
+                            let first_x = *this.series_list[idx].data_x.first().unwrap_or(&px);
+                            let last_x = *this.series_list[idx].data_x.last().unwrap_or(&px);
+                            this.last_frame_span = Some(last_x - first_x);
+
+                            // clear all series
+                            for s2 in this.series_list.iter_mut() {
+                                s2.data_x.clear();
+                                s2.data_y.clear();
+                                s2.min_y = 0.0;
+                                s2.max_y = 0.0;
+                            }
+
+                            // start new frame with current point
+                            {
+                                let series = &mut this.series_list[idx];
+                                series.data_x.push(px);
+                                series.data_y.push(py);
+                                series.min_y = py;
+                                series.max_y = py;
+                            }
+                            let span = this.last_frame_span.unwrap_or(this.buffer_size as f64);
+                            this.x_min = px;
+                            this.x_max = px + span;
+                        } else {
+                            if px > this.x_max || this.x_min > this.x_max {
+                                this.x_max = px;
+                                if !this.initial_x_set {
+                                    this.initial_x_set = true;
+                                    this.x_min = px;
+                                }
                             }
                         }
                     }
+                    _ => {}
                 }
-                // Update Q_PROPERTY values
-                self.as_mut().set_x_min(this.x_min);
-                self.as_mut().set_x_max(this.x_max);
+
+                x_range_update = Some((this.x_min, this.x_max));
             }
-            // Update y axis range if auto
+            // Y auto range
             if this.y_auto_range {
-                // For global y range, find min/max across all series
-                let mut new_y_min = std::f64::MAX;
-                let mut new_y_max = std::f64::MIN;
+                let mut new_y_min = f64::INFINITY;
+                let mut new_y_max = f64::NEG_INFINITY;
                 for s2 in &this.series_list {
                     if !s2.data_y.is_empty() {
                         if s2.min_y < new_y_min { new_y_min = s2.min_y; }
                         if s2.max_y > new_y_max { new_y_max = s2.max_y; }
                     }
                 }
-                if new_y_min == std::f64::MAX {
+                if !new_y_min.is_finite() {
                     new_y_min = 0.0;
                     new_y_max = 1.0;
-                } else if new_y_min == new_y_max {
+                } else if (new_y_min - new_y_max).abs() < f64::EPSILON {
                     new_y_max = new_y_min + 1.0;
                 }
                 this.y_min = new_y_min;
                 this.y_max = new_y_max;
-                self.as_mut().set_y_min(new_y_min);
-                self.as_mut().set_y_max(new_y_max);
+                y_range_update = Some((new_y_min, new_y_max));
             }
         }
-        // Trigger repaint
+
+        if let Some((xmin, xmax)) = x_range_update {
+            self.as_mut().set_x_min(xmin);
+            self.as_mut().set_x_max(xmax);
+        }
+        if let Some((ymin, ymax)) = y_range_update {
+            self.as_mut().set_y_min(ymin);
+            self.as_mut().set_y_max(ymax);
+        }
         self.update();
     }
 
     pub fn zoom_to_region(mut self: Pin<&mut Self>, x1: f64, x2: f64, y1: f64, y2: f64) {
-        let mut this = self.as_mut().rust_mut();
-        if x2 != x1 {
-            this.x_auto_range = false;
-            this.x_min = x1.min(x2);
-            this.x_max = x1.max(x2);
+        let mut x_update: Option<(f64, f64)> = None;
+        let mut y_update: Option<(f64, f64)> = None;
+        let mut disable_x_auto = false;
+        let mut disable_y_auto = false;
+
+        {
+            let mut this = self.as_mut().rust_mut();
+            if x2 != x1 {
+                disable_x_auto = true;
+                this.x_auto_range = false;
+                this.x_min = x1.min(x2);
+                this.x_max = x1.max(x2);
+                x_update = Some((this.x_min, this.x_max));
+            }
+            if y2 != y1 {
+                disable_y_auto = true;
+                this.y_auto_range = false;
+                this.y_min = y1.min(y2);
+                this.y_max = y1.max(y2);
+                y_update = Some((this.y_min, this.y_max));
+            }
+        }
+
+        if disable_x_auto {
             self.as_mut().set_x_auto_range(false);
-            self.as_mut().set_x_min(this.x_min);
-            self.as_mut().set_x_max(this.x_max);
         }
-        if y2 != y1 {
-            this.y_auto_range = false;
-            this.y_min = y1.min(y2);
-            this.y_max = y1.max(y2);
+        if let Some((xmin, xmax)) = x_update {
+            self.as_mut().set_x_min(xmin);
+            self.as_mut().set_x_max(xmax);
+        }
+
+        if disable_y_auto {
             self.as_mut().set_y_auto_range(false);
-            self.as_mut().set_y_min(this.y_min);
-            self.as_mut().set_y_max(this.y_max);
         }
+        if let Some((ymin, ymax)) = y_update {
+            self.as_mut().set_y_min(ymin);
+            self.as_mut().set_y_max(ymax);
+        }
+
         self.update();
     }
 
     pub fn zoom_x(mut self: Pin<&mut Self>, x1: f64, x2: f64) {
-        let mut this = self.as_mut().rust_mut();
-        if x2 != x1 {
-            this.x_auto_range = false;
-            this.x_min = x1.min(x2);
-            this.x_max = x1.max(x2);
+        let mut x_update: Option<(f64, f64)> = None;
+        {
+            let mut this = self.as_mut().rust_mut();
+            if x2 != x1 {
+                this.x_auto_range = false;
+                this.x_min = x1.min(x2);
+                this.x_max = x1.max(x2);
+                x_update = Some((this.x_min, this.x_max));
+            }
+        }
+
+        if let Some((xmin, xmax)) = x_update {
             self.as_mut().set_x_auto_range(false);
-            self.as_mut().set_x_min(this.x_min);
-            self.as_mut().set_x_max(this.x_max);
+            self.as_mut().set_x_min(xmin);
+            self.as_mut().set_x_max(xmax);
         }
         self.update();
     }
 
     pub fn zoom_y(mut self: Pin<&mut Self>, y1: f64, y2: f64) {
-        let mut this = self.as_mut().rust_mut();
-        if y2 != y1 {
-            this.y_auto_range = false;
-            this.y_min = y1.min(y2);
-            this.y_max = y1.max(y2);
+        let mut y_update: Option<(f64, f64)> = None;
+        {
+            let mut this = self.as_mut().rust_mut();
+            if y2 != y1 {
+                this.y_auto_range = false;
+                this.y_min = y1.min(y2);
+                this.y_max = y1.max(y2);
+                y_update = Some((this.y_min, this.y_max));
+            }
+        }
+        if let Some((ymin, ymax)) = y_update {
             self.as_mut().set_y_auto_range(false);
-            self.as_mut().set_y_min(this.y_min);
-            self.as_mut().set_y_max(this.y_max);
+            self.as_mut().set_y_min(ymin);
+            self.as_mut().set_y_max(ymax);
         }
         self.update();
     }
@@ -673,99 +771,127 @@ impl graph_object_qobject::GraphObject {
         if factor <= 0.0 {
             return;
         }
-        let mut this = self.as_mut().rust_mut();
-        // Turn off auto range when manual zoom
-        if this.x_auto_range || this.y_auto_range {
-            this.x_auto_range = false;
-            this.y_auto_range = false;
+        let mut disable_auto = false;
+        let mut new_ranges: Option<(f64, f64, f64, f64)> = None;
+
+        {
+            let mut this = self.as_mut().rust_mut();
+            if this.x_auto_range || this.y_auto_range {
+                this.x_auto_range = false;
+                this.y_auto_range = false;
+                disable_auto = true;
+            }
+
+            let old_x_min = this.x_min;
+            let old_x_max = this.x_max;
+            let old_y_min = this.y_min;
+            let old_y_max = this.y_max;
+
+            this.x_min = center_x - (center_x - old_x_min) / factor;
+            this.x_max = center_x + (old_x_max - center_x) / factor;
+            this.y_min = center_y - (center_y - old_y_min) / factor;
+            this.y_max = center_y + (old_y_max - center_y) / factor;
+
+            new_ranges = Some((this.x_min, this.x_max, this.y_min, this.y_max));
+        }
+
+        if disable_auto {
             self.as_mut().set_x_auto_range(false);
             self.as_mut().set_y_auto_range(false);
         }
-        let fx = factor;
-        let fy = factor;
-        let old_x_min = this.x_min;
-        let old_x_max = this.x_max;
-        let old_y_min = this.y_min;
-        let old_y_max = this.y_max;
-        // center_x, center_y in data coordinates around which to zoom
-        this.x_min = center_x - (center_x - old_x_min) / fx;
-        this.x_max = center_x + (old_x_max - center_x) / fx;
-        this.y_min = center_y - (center_y - old_y_min) / fy;
-        this.y_max = center_y + (old_y_max - center_y) / fy;
-        self.as_mut().set_x_min(this.x_min);
-        self.as_mut().set_x_max(this.x_max);
-        self.as_mut().set_y_min(this.y_min);
-        self.as_mut().set_y_max(this.y_max);
+        if let Some((xmin, xmax, ymin, ymax)) = new_ranges {
+            self.as_mut().set_x_min(xmin);
+            self.as_mut().set_x_max(xmax);
+            self.as_mut().set_y_min(ymin);
+            self.as_mut().set_y_max(ymax);
+        }
         self.update();
     }
 
     pub fn pan(mut self: Pin<&mut Self>, delta_x: f64, delta_y: f64) {
-        let mut this = self.as_mut().rust_mut();
-        if this.x_auto_range || this.y_auto_range {
-            // if auto, disable auto when user pans
-            this.x_auto_range = false;
-            this.y_auto_range = false;
+        let mut disable_auto = false;
+        let mut new_ranges: Option<(f64, f64, f64, f64)> = None;
+
+        {
+            let mut this = self.as_mut().rust_mut();
+            if this.x_auto_range || this.y_auto_range {
+                this.x_auto_range = false;
+                this.y_auto_range = false;
+                disable_auto = true;
+            }
+
+            this.x_min += delta_x;
+            this.x_max += delta_x;
+            this.y_min += delta_y;
+            this.y_max += delta_y;
+            new_ranges = Some((this.x_min, this.x_max, this.y_min, this.y_max));
+        }
+
+        if disable_auto {
             self.as_mut().set_x_auto_range(false);
             self.as_mut().set_y_auto_range(false);
         }
-        // Shift view by delta in data units
-        this.x_min += delta_x;
-        this.x_max += delta_x;
-        this.y_min += delta_y;
-        this.y_max += delta_y;
-        self.as_mut().set_x_min(this.x_min);
-        self.as_mut().set_x_max(this.x_max);
-        self.as_mut().set_y_min(this.y_min);
-        self.as_mut().set_y_max(this.y_max);
+        if let Some((xmin, xmax, ymin, ymax)) = new_ranges {
+            self.as_mut().set_x_min(xmin);
+            self.as_mut().set_x_max(xmax);
+            self.as_mut().set_y_min(ymin);
+            self.as_mut().set_y_max(ymax);
+        }
         self.update();
     }
 
     pub fn reset_zoom(mut self: Pin<&mut Self>) {
-        let mut this = self.as_mut().rust_mut();
-        // Re-enable auto range and recompute full data extents
-        this.x_auto_range = true;
-        this.y_auto_range = true;
+        let mut ranges: Option<(f64, f64, f64, f64)> = None;
+        {
+            let mut this = self.as_mut().rust_mut();
+            this.x_auto_range = true;
+            this.y_auto_range = true;
+
+            let mut xmin_all = f64::INFINITY;
+            let mut xmax_all = f64::NEG_INFINITY;
+            let mut ymin_all = f64::INFINITY;
+            let mut ymax_all = f64::NEG_INFINITY;
+
+            for s in &this.series_list {
+                if let (Some(first), Some(last)) = (s.data_x.first(), s.data_x.last()) {
+                    if *first < xmin_all { xmin_all = *first; }
+                    if *last > xmax_all { xmax_all = *last; }
+                }
+                if !s.data_y.is_empty() {
+                    if s.min_y < ymin_all { ymin_all = s.min_y; }
+                    if s.max_y > ymax_all { ymax_all = s.max_y; }
+                }
+            }
+            if !xmin_all.is_finite() || !xmax_all.is_finite() {
+                xmin_all = 0.0;
+                xmax_all = 1.0;
+            }
+            if !ymin_all.is_finite() || !ymax_all.is_finite() {
+                ymin_all = 0.0;
+                ymax_all = 1.0;
+            }
+            if (xmin_all - xmax_all).abs() < f64::EPSILON {
+                xmax_all = xmin_all + 1.0;
+            }
+            if (ymin_all - ymax_all).abs() < f64::EPSILON {
+                ymax_all = ymin_all + 1.0;
+            }
+            this.x_min = xmin_all;
+            this.x_max = xmax_all;
+            this.y_min = ymin_all;
+            this.y_max = ymax_all;
+
+            ranges = Some((xmin_all, xmax_all, ymin_all, ymax_all));
+        }
+
         self.as_mut().set_x_auto_range(true);
         self.as_mut().set_y_auto_range(true);
-        // Compute overall min/max from all data
-        let mut xmin_all = std::f64::MAX;
-        let mut xmax_all = std::f64::MIN;
-        let mut ymin_all = std::f64::MAX;
-        let mut ymax_all = std::f64::MIN;
-        for s in &this.series_list {
-            if !s.data_x.is_empty() {
-                let sxmin = *s.data_x.first().unwrap();
-                let sxmax = *s.data_x.last().unwrap();
-                if sxmin < xmin_all { xmin_all = sxmin; }
-                if sxmax > xmax_all { xmax_all = sxmax; }
-            }
-            if !s.data_y.is_empty() {
-                if s.min_y < ymin_all { ymin_all = s.min_y; }
-                if s.max_y > ymax_all { ymax_all = s.max_y; }
-            }
+        if let Some((xmin, xmax, ymin, ymax)) = ranges {
+            self.as_mut().set_x_min(xmin);
+            self.as_mut().set_x_max(xmax);
+            self.as_mut().set_y_min(ymin);
+            self.as_mut().set_y_max(ymax);
         }
-        if xmin_all == std::f64::MAX || xmax_all == std::f64::MIN {
-            xmin_all = 0.0;
-            xmax_all = 1.0;
-        }
-        if ymin_all == std::f64::MAX || ymax_all == std::f64::MIN {
-            ymin_all = 0.0;
-            ymax_all = 1.0;
-        }
-        if xmin_all == xmax_all {
-            xmax_all = xmin_all + 1.0;
-        }
-        if ymin_all == ymax_all {
-            ymax_all = ymin_all + 1.0;
-        }
-        this.x_min = xmin_all;
-        this.x_max = xmax_all;
-        this.y_min = ymin_all;
-        this.y_max = ymax_all;
-        self.as_mut().set_x_min(xmin_all);
-        self.as_mut().set_x_max(xmax_all);
-        self.as_mut().set_y_min(ymin_all);
-        self.as_mut().set_y_max(ymax_all);
         self.update();
     }
 
@@ -892,7 +1018,7 @@ impl graph_object_qobject::GraphObject {
                 });
                 if this.grid_visible && !this.separate_series {
                     // horizontal grid line
-                    pinned_painter.as_mut().draw_line(plot_x, y_pixel, plot_x + plot_width, y_pixel);
+                    draw_line(&mut pinned_painter, plot_x, y_pixel, plot_x + plot_width, y_pixel);
                 }
             }
             // Horizontal axis line (bottom)
@@ -901,7 +1027,7 @@ impl graph_object_qobject::GraphObject {
             axis_pen2.set_width(0);
             axis_pen2.set_style(PenStyle::SolidLine);
             pinned_painter.as_mut().set_pen_with_pen(&axis_pen2);
-            pinned_painter.as_mut().draw_line(plot_x, x_axis_y, plot_x + plot_width, x_axis_y);
+            draw_line(&mut pinned_painter, plot_x, x_axis_y, plot_x + plot_width, x_axis_y);
             // Draw tick marks and labels
             let mut axis_pen3 = QPen::default();
             axis_pen3.set_color(&axis_color);
@@ -968,7 +1094,7 @@ impl graph_object_qobject::GraphObject {
                     });
                     // tick mark (horizontal small line)
                     let tick_len = 5.0;
-                    pinned_painter.as_mut().draw_line(y_axis_x, y_pixel, y_axis_x + tick_len, y_pixel);
+                    draw_line(&mut pinned_painter, y_axis_x, y_pixel, y_axis_x + tick_len, y_pixel);
                     // label, skip top label to avoid cut off
                     if j == num_y_ticks - 1 {
                         continue;
@@ -1203,9 +1329,9 @@ impl graph_object_qobject::GraphObject {
                                 } else {
                                     band_bottom_y - ((s.data_y[k + 1] - local_min_val) * y_scale_local)
                                 };
-                                pinned_painter.as_mut().draw_line(x_curr, y_curr, x_next, y_curr);
+                                draw_line(&mut pinned_painter, x_curr, y_curr, x_next, y_curr);
                                 if (s.data_y[k] - s.data_y[k + 1]).abs() > f64::EPSILON {
-                                    pinned_painter.as_mut().draw_line(x_next, y_curr, x_next, y_next);
+                                    draw_line(&mut pinned_painter, x_next, y_curr, x_next, y_next);
                                 }
                             }
                         } else {
@@ -1240,7 +1366,7 @@ impl graph_object_qobject::GraphObject {
                                 } else {
                                     band_bottom_y - ((s.data_y[k + 1] - local_min_val) * y_scale_local)
                                 };
-                                pinned_painter.as_mut().draw_line(x1, y1, x2, y2);
+                                draw_line(&mut pinned_painter, x1, y1, x2, y2);
                             }
                         }
                     }
@@ -1315,7 +1441,7 @@ impl graph_object_qobject::GraphObject {
                     legend_text_pen.set_width(0);
                     legend_text_pen.set_style(PenStyle::SolidLine);
                     pinned_painter.as_mut().set_pen_with_pen(&legend_text_pen);
-                    draw_text(&mut pinned_painter, legend_x + 20.0, legend_y  + legend_padding + idx as f64 * entry_height + 10.0, &text);
+                    draw_text(&mut pinned_painter, legend_x + 20.0, legend_y + legend_padding + idx as f64 * entry_height + 10.0, &text);
                 }
             }
             // Draw cursor lines and differences
