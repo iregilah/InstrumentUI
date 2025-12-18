@@ -20,6 +20,7 @@ pub mod graph_object_qobject {
         type QPointF = cxx_qt_lib::QPointF;
         type QPen = cxx_qt_lib::QPen;
         include!(<QtQuick/QQuickPaintedItem>);
+                type QQuickPaintedItem;
         include!(<QtQuick/QQuickItem>);
         type QQuickItem;
     }
@@ -55,7 +56,7 @@ pub mod graph_object_qobject {
     extern "RustQt" {
         #[qobject]
         #[qml_element]
-        #[base = "QQuickPaintedItem"]
+        #[base = QQuickPaintedItem]
         #[qproperty(bool, legend_visible, cxx_name = "legendVisible")]
         #[qproperty(i32, legend_position, cxx_name = "legendPosition")]
         #[qproperty(bool, grid_visible, cxx_name = "gridVisible")]
