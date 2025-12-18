@@ -18,8 +18,10 @@ pub mod graph_object_qobject {
         include!("cxx-qt-lib/qpen.h");
         type QPen = cxx_qt_lib::QPen;
         include!("cxx-qt-lib/qimage.h");
+        include!(<QtGui/QImage>);
         type QImage = cxx_qt_lib::QImage;
         include!(<QtQuick/QQuickPaintedItem>);
+
         type QQuickPaintedItem;
     }
     unsafe extern "C++" {
@@ -68,6 +70,7 @@ pub mod graph_object_qobject {
         fn clipboard() -> *mut QClipboard;
         #[rust_name = "clipboard_set_text"]
         fn setText(self: Pin<&mut QClipboard>, text: &QString);
+
         #[rust_name = "clipboard_set_image"]
         fn setImage(self: Pin<&mut QClipboard>, image: &QImage);
     }
@@ -113,15 +116,7 @@ pub mod graph_object_qobject {
         type GraphObject = super::GraphObjectRust;
     }
     impl cxx_qt::Threading for GraphObject {}
-    unsafe extern "C++" {
-        include!("graph_object_helpers.h");
-        #[namespace = "graph_object_helpers"]
-        #[rust_name = "helpers_grab_image"]
-        unsafe fn grab_image(item: *mut GraphObject) -> UniquePtr<QImage>;
-        #[namespace = "graph_object_helpers"]
-        #[rust_name = "helpers_save_image"]
-        unsafe fn save_image(item: *mut GraphObject, file_path: &QString) -> bool;
-    }
+
 
     extern "RustQt" {
         #[qinvokable]
@@ -158,6 +153,20 @@ pub mod graph_object_qobject {
         fn clear_cursors(self: Pin<&mut GraphObject>);
         #[qinvokable]
         fn request_repaint(self: Pin<&mut GraphObject>);
+
+        // QML akkor hívja, amikor a grabToImage elkészült (QImage megvan)
+        #[qinvokable]
+        #[cxx_name = "copyImageReady"]
+        fn copy_image_ready(self: Pin<&mut GraphObject>, image: &QImage);
+
+        // Rust -> QML: kérünk egy aszinkron grabToImage-ot
+        // (CXX-Qt jeladást Rustból úgy csinálsz, hogy a signal signature-t meghívod) :contentReference[oaicite:1]{index=1}
+        #[qsignal]
+        #[cxx_name = "requestCopyImage"]
+        fn request_copy_image(self: Pin<&mut GraphObject>);
+        #[qsignal]
+        #[cxx_name = "requestSaveImage"]
+        fn request_save_image(self: Pin<&mut GraphObject>, file_path: &QString);
         #[cxx_override]
         unsafe fn paint(self: Pin<&mut GraphObject>, painter: *mut QPainter);
     }
@@ -332,68 +341,41 @@ impl graph_object_qobject::GraphObject {
         }
     }
     pub fn copy_image(mut self: Pin<&mut Self>) {
-        let clipboard_ptr = graph_object_qobject::clipboard();
-        if clipboard_ptr.is_null() {
-            return;
-        }
-        /*
-        unsafe {
-            if let Some(cb) = clipboard_ptr.as_mut() {
-                let mut pinned_cb = Pin::new_unchecked(cb);
-                // Attempt to grab image from QQuickPaintedItem
-                let raw_ptr = graph_object_qobject::static_cast_QQuickPaintedItem(self.as_mut().cpp_mut());
-                if !raw_ptr.is_null() {
-                    let grab_result = Pin::new_unchecked(&mut *raw_ptr).grab_to_image_item();
-                    if !grab_result.is_null() {
-                        let img = (*grab_result).image();
-                        pinned_cb.as_mut().clipboard_set_image(&img);
-                        return;
-                    }
-                }
-                // Fallback: copy placeholder text if image not captured
-                let msg = QString::from("[Image Data]");
-                pinned_cb.as_mut().clipboard_set_text(&msg);
-            }
-        }
-        */
-        let img = unsafe { graph_object_qobject::helpers_grab_image(self.as_mut().cpp_mut()) };
-        unsafe {
-            if let Some(cb) = clipboard_ptr.as_mut() {
-                let mut pinned_cb = Pin::new_unchecked(cb);
-                if let Some(img_ref) = img.as_ref() {
-                    pinned_cb.as_mut().clipboard_set_image(img_ref);
-                } else {
-                    let msg = QString::from("[Image capture failed]");
-                    pinned_cb.as_mut().clipboard_set_text(&msg);
-                }
-            }
-        }
+        // új: QML fogja megcsinálni a grabToImage-ot (async), és visszahív copyImageReady(QImage)-gel.
+        self.as_mut().request_copy_image();
     }
 
-    pub fn save_image(mut self: Pin<&mut Self>, file_path: &QString) {
-        /*
-        let raw_ptr = graph_object_qobject::static_cast_QQuickPaintedItem(self.as_mut().cpp_mut());
-        if raw_ptr.is_null() {
+    pub fn save_image(mut self: Pin<&mut Self>, file_path: &graph_object_qobject::QString) {
+        // új: normalizáljuk a path-ot, majd QML menti result.saveToFile(...) hívással
+        let mut path = file_path.to_string();
+
+        // FileDialog gyakran file:// URL-t ad. QML oldalon is lehet toLocalFile()-t használni,
+        // de itt is kezeljük, hogy stabil legyen.
+        if let Some(rest) = path.strip_prefix("file://") {
+            path = rest.to_string();
+            // Windows: "file:///C:/..." -> "/C:/..." (ezt javítjuk)
+            if path.starts_with('/') && path.len() > 2 && path.as_bytes()[2] == b':' {
+                path = path[1..].to_string();
+            }
+        }
+
+        // egyszerű kiterjesztés-kezelés (ha nálad máshogy van, itt igazítsd)
+        if !path.contains('.') {
+            path.push_str(".png");
+        }
+        let qpath = graph_object_qobject::QString::from(path.as_str());
+        self.as_mut().request_save_image(&qpath);
+    }
+
+    pub fn copy_image_ready(self: Pin<&mut Self>, image: &graph_object_qobject::QImage) {
+        let clipboard = graph_object_qobject::clipboard();
+        if clipboard.is_null() {
             return;
         }
         unsafe {
-            let grab_result = Pin::new_unchecked(&mut *raw_ptr).grab_to_image_item();
-            if !grab_result.is_null() {
-                let mut save_path = file_path.to_string();
-                if !save_path.ends_with(".png") && !save_path.ends_with(".jpg") && !save_path.ends_with(".bmp") {
-                    save_path.push_str(".png");
-                }
-                let qstr = QString::from(&save_path);
-                (*grab_result).result_save_to_file(&qstr);
-            }
+            let mut clipboard = Pin::new_unchecked(&mut *clipboard);
+            clipboard.as_mut().clipboard_set_image(image);
         }
-        */
-        let mut save_path = file_path.to_string();
-        if !save_path.ends_with(".png") && !save_path.ends_with(".jpg") && !save_path.ends_with(".bmp") {
-            save_path.push_str(".png");
-        }
-        let qstr = QString::from(&save_path);
-        let _ = unsafe { graph_object_qobject::helpers_save_image(self.as_mut().cpp_mut(), &qstr) };
     }
     pub fn place_vertical_cursor(mut self: Pin<&mut Self>, x: f64) {
         let this = self.as_mut().rust_mut();
