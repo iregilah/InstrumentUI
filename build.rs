@@ -10,7 +10,7 @@ fn main() {
         .qt_module("Quick")
         .qml_module(QmlModule {
             uri: "InstrumentUI",
-            rust_files: &["src/oscillo_object.rs", "src/awg_object.rs", "src/instrument_manager.rs", "src/graph_object.rs"],
+            rust_files: &["src/oscillo_object.rs", "src/awg_object.rs", "src/instrument_manager.rs", "src/graph_object.rs", "src/heatmap_object.rs"],
             qml_files: &["qml/main.qml", "qml/awg.qml", "qml/hub.qml"],
             ..Default::default()
         })

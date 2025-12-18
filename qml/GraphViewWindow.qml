@@ -231,6 +231,26 @@ ApplicationWindow {
                 }
             }
         }
+        Connections {
+            target: graph
+
+            function onRequestCopyData(text) {
+                // Qt 6+: clipboard elérés QML-ből
+                Qt.application.clipboard.setText(text)
+            }
+
+            function onRequestCopyImage() {
+                graph.grabToImage(function (result) {
+                    Qt.application.clipboard.setImage(result.image)
+                })
+            }
+
+            function onRequestSaveImage(filePath) {
+                graph.grabToImage(function (result) {
+                    result.saveToFile(filePath)
+                })
+            }
+        }
     }
 
     Menu {
