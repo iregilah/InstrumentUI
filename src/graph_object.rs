@@ -1,7 +1,7 @@
 // src/graph_object.rs
 
 use cxx_qt::{CxxQtType, Threading};
-use cxx_qt_lib::{PenStyle, QPen, QColor, QRectF, QSizeF, QString};
+use cxx_qt_lib::{PenStyle, QPen, QColor, QRectF, QSizeF, QString, QPointF};
 use std::pin::Pin;
 
 #[cxx_qt::bridge]
@@ -16,25 +16,28 @@ pub mod graph_object_qobject {
         include!("cxx-qt-lib/qrectf.h");
         type QRectF = cxx_qt_lib::QRectF;
         include!("cxx-qt-lib/qpen.h");
+        include!("cxx-qt-lib/qpointf.h");
+        type QPointF = cxx_qt_lib::QPointF;
         type QPen = cxx_qt_lib::QPen;
-        include!("cxx-qt-lib/qimage.h");
-        include!(<QtGui/QImage>);
-        type QImage = cxx_qt_lib::QImage;
         include!(<QtQuick/QQuickPaintedItem>);
-
-        type QQuickPaintedItem;
+        include!(<QtQuick/QQuickItem>);
+        type QQuickItem;
     }
     unsafe extern "C++" {
         include!(<QtGui/QPainter>);
         type QPainter;
+        // Qt-ban NINCS drawLine(double,double,double,double) overload.
+        // Használjuk a QPointF overloadot:
         #[rust_name = "draw_line"]
-        fn drawLine(self: Pin<&mut QPainter>, x1: f64, y1: f64, x2: f64, y2: f64);
+        fn drawLine(self: Pin<&mut QPainter>, p1: &QPointF, p2: &QPointF);
+        // Qt-ban NINCS drawText(double,double,QString) overload.
+        // Használjuk a QPointF overloadot:
         #[rust_name = "draw_text"]
-        fn drawText(self: Pin<&mut QPainter>, x: f64, y: f64, text: &QString);
+        fn drawText(self: Pin<&mut QPainter>, p: &QPointF, text: &QString);
         #[rust_name = "draw_ellipse"]
         fn drawEllipse(self: Pin<&mut QPainter>, rect: &QRectF);
-        #[rust_name = "set_render_hint"]
-        fn setRenderHint(self: Pin<&mut QPainter>, hint: i32, enabled: bool);
+        // #[rust_name = "set_render_hint"]
+        //fn setRenderHint(self: Pin<&mut QPainter>, hint: i32, enabled: bool);
         #[rust_name = "fill_rect"]
         fn fillRect(self: Pin<&mut QPainter>, rect: &QRectF, color: &QColor);
         #[rust_name = "set_pen_with_pen"]
@@ -48,54 +51,11 @@ pub mod graph_object_qobject {
         #[rust_name = "rotate"]
         fn rotate(self: Pin<&mut QPainter>, angle: f64);
     }
-    /*
-        unsafe extern "C++" {
-            include!(<QtGui/QPen>);
-            type QPen;
-            #[rust_name = "set_pen_with_pen"]
-            fn setPen(self: Pin<&mut QPainter>, pen: &QPen);
-        }
-        unsafe extern "C++" {
-            include!(<QtGui/QImage>);
-            type QImage;
-        }
-
-     */
-    unsafe extern "C++" {
-        include!(<QtGui/QGuiApplication>);
-        include!(<QtGui/QClipboard>);
-        type QClipboard;
-        #[namespace = "QGuiApplication"]
-        #[rust_name = "clipboard"]
-        fn clipboard() -> *mut QClipboard;
-        #[rust_name = "clipboard_set_text"]
-        fn setText(self: Pin<&mut QClipboard>, text: &QString);
-
-        #[rust_name = "clipboard_set_image"]
-        fn setImage(self: Pin<&mut QClipboard>, image: &QImage);
-    }
-    /*
-    unsafe extern "C++" {
-        #[rust_name = "qpainteditem_to_qquickitem"]
-        fn static_cast_QQuickItem(ptr: *mut QQuickPaintedItem) -> *mut QQuickItem;
-        #[rust_name = "graphobject_to_qpainteditem"]
-        fn static_cast_QQuickPaintedItem(ptr: *mut GraphObject) -> *mut QQuickPaintedItem;
-    }
-    unsafe extern "C++" {
-        include!(<QtQuick/QQuickItemGrabResult>);
-        type QQuickItemGrabResult;
-        #[rust_name = "grab_to_image_item"]
-        fn grabToImage(self: Pin<&mut QQuickPaintedItem>) -> *mut QQuickItemGrabResult;
-        #[rust_name = "result_image"]
-        fn image(self: &QQuickItemGrabResult) -> QImage;
-        #[rust_name = "result_save_to_file"]
-        fn saveToFile(self: &QQuickItemGrabResult, file: &QString) -> bool;
-    }*/
 
     extern "RustQt" {
         #[qobject]
         #[qml_element]
-        #[base = QQuickPaintedItem]
+        #[base = "QQuickPaintedItem"]
         #[qproperty(bool, legend_visible, cxx_name = "legendVisible")]
         #[qproperty(i32, legend_position, cxx_name = "legendPosition")]
         #[qproperty(bool, grid_visible, cxx_name = "gridVisible")]
@@ -117,6 +77,10 @@ pub mod graph_object_qobject {
     }
     impl cxx_qt::Threading for GraphObject {}
 
+    impl cxx_qt::Constructor<
+        (*mut QQuickItem,),
+        BaseArguments=(*mut QQuickItem,)
+    > for GraphObject {}
 
     extern "RustQt" {
         #[qinvokable]
@@ -153,17 +117,15 @@ pub mod graph_object_qobject {
         fn clear_cursors(self: Pin<&mut GraphObject>);
         #[qinvokable]
         fn request_repaint(self: Pin<&mut GraphObject>);
-
-        // QML akkor hívja, amikor a grabToImage elkészült (QImage megvan)
-        #[qinvokable]
-        #[cxx_name = "copyImageReady"]
-        fn copy_image_ready(self: Pin<&mut GraphObject>, image: &QImage);
-
-        // Rust -> QML: kérünk egy aszinkron grabToImage-ot
-        // (CXX-Qt jeladást Rustból úgy csinálsz, hogy a signal signature-t meghívod) :contentReference[oaicite:1]{index=1}
+        // Rust -> QML: kérünk clipboard szöveg másolást
+        #[qsignal]
+        #[cxx_name = "requestCopyData"]
+        fn request_copy_data(self: Pin<&mut GraphObject>, text: &QString);
+        // Rust -> QML: kérünk egy aszinkron grabToImage-ot + clipboard image-et
         #[qsignal]
         #[cxx_name = "requestCopyImage"]
         fn request_copy_image(self: Pin<&mut GraphObject>);
+
         #[qsignal]
         #[cxx_name = "requestSaveImage"]
         fn request_save_image(self: Pin<&mut GraphObject>, file_path: &QString);
@@ -176,6 +138,22 @@ pub mod graph_object_qobject {
         fn update(self: Pin<&mut GraphObject>);
         #[inherit]
         fn size(self: &GraphObject) -> QSizeF;
+    }
+}
+
+// Custom constructor implementáció (QQuickItem* parent)
+impl cxx_qt::Constructor<(*mut graph_object_qobject::QQuickItem,)> for graph_object_qobject::GraphObject {
+    type NewArguments = ();
+    type BaseArguments = (*mut graph_object_qobject::QQuickItem,);
+    type InitializeArguments = ();
+    fn route_arguments(
+        arguments: (*mut graph_object_qobject::QQuickItem,),
+    ) -> (Self::NewArguments, Self::BaseArguments, Self::InitializeArguments) {
+        ((), arguments, ())
+    }
+
+    fn new(_arguments: Self::NewArguments) -> <Self as cxx_qt::CxxQtType>::Rust {
+        GraphObjectRust::default()
     }
 }
 
@@ -322,26 +300,20 @@ impl graph_object_qobject::GraphObject {
     }
     pub fn copy_data(mut self: Pin<&mut Self>) {
         let this = self.as_ref().rust();
-        let clipboard_ptr = graph_object_qobject::clipboard();
-        if !clipboard_ptr.is_null() {
-            let mut pinned_cb = unsafe { Pin::new_unchecked(&mut *clipboard_ptr) };
-            let mut csv = String::new();
-            for (i, s) in this.series_list.iter().enumerate() {
-                if i > 0 {
-                    csv.push('\n');
-                }
-                let header_x = if !this.x_label.to_string().is_empty() { this.x_label.to_string() } else { "X".to_owned() };
-                csv += &format!("{},{}\n", header_x, s.name);
-                for (x, y) in s.data_x.iter().zip(&s.data_y) {
-                    csv += &format!("{:.6},{:.6}\n", x, y);
-                }
+        let mut csv = String::new();
+        for (i, s) in this.series_list.iter().enumerate() {
+            if i > 0 { csv.push('\n'); }
+            let header_x = if !this.x_label.to_string().is_empty() { this.x_label.to_string() } else { "X".to_owned() };
+            csv += &format!("{},{}\n", header_x, s.name);
+            for (x, y) in s.data_x.iter().zip(&s.data_y) {
+                csv += &format!("{:.6},{:.6}\n", x, y);
             }
-            let qstr = QString::from(&csv);
-            pinned_cb.as_mut().clipboard_set_text(&qstr);
         }
+        let qstr = QString::from(&csv);
+        self.as_mut().request_copy_data(&qstr);
     }
     pub fn copy_image(mut self: Pin<&mut Self>) {
-        // új: QML fogja megcsinálni a grabToImage-ot (async), és visszahív copyImageReady(QImage)-gel.
+        // QML fogja megcsinálni a grabToImage-ot (async) és clipboard-ra teszi.
         self.as_mut().request_copy_image();
     }
 
@@ -367,16 +339,6 @@ impl graph_object_qobject::GraphObject {
         self.as_mut().request_save_image(&qpath);
     }
 
-    pub fn copy_image_ready(self: Pin<&mut Self>, image: &graph_object_qobject::QImage) {
-        let clipboard = graph_object_qobject::clipboard();
-        if clipboard.is_null() {
-            return;
-        }
-        unsafe {
-            let mut clipboard = Pin::new_unchecked(&mut *clipboard);
-            clipboard.as_mut().clipboard_set_image(image);
-        }
-    }
     pub fn place_vertical_cursor(mut self: Pin<&mut Self>, x: f64) {
         let this = self.as_mut().rust_mut();
         if this.cursor_x_positions.len() < 2 {
@@ -810,8 +772,18 @@ impl graph_object_qobject::GraphObject {
         if let Some(painter) = painter.as_mut() {
             let mut pinned_painter = Pin::new_unchecked(painter);
             let this = self.as_ref().rust();
-            // Enable antialiasing for smoother lines and text
-            pinned_painter.as_mut().set_render_hint(1, true);
+            // --- kis helperek, hogy ne kelljen mindenhol QPointF-et kézzel gyártani ---
+            let mut draw_line = |p: &mut Pin<&mut graph_object_qobject::QPainter>,
+                                 x1: f64, y1: f64, x2: f64, y2: f64| {
+                let p1 = QPointF::new(x1, y1);
+                let p2 = QPointF::new(x2, y2);
+                p.as_mut().draw_line(&p1, &p2);
+            };
+            let mut draw_text = |p: &mut Pin<&mut graph_object_qobject::QPainter>,
+                                 x: f64, y: f64, text: &QString| {
+                let pt = QPointF::new(x, y);
+                p.as_mut().draw_text(&pt, text);
+            };
             // Determine dimensions
             let size = self.size();
             let width = size.width();
@@ -883,7 +855,7 @@ impl graph_object_qobject::GraphObject {
                 };
                 if this.grid_visible {
                     // vertical grid line
-                    pinned_painter.as_mut().draw_line(x_pixel, plot_y, x_pixel, plot_y + plot_height);
+                    draw_line(&mut pinned_painter, x_pixel, plot_y, x_pixel, plot_y + plot_height);
                 }
             }
             // Vertical axis line (left)
@@ -892,7 +864,7 @@ impl graph_object_qobject::GraphObject {
             axis_pen.set_width(0);
             axis_pen.set_style(PenStyle::SolidLine);
             pinned_painter.as_mut().set_pen_with_pen(&axis_pen);
-            pinned_painter.as_mut().draw_line(y_axis_x, plot_y, y_axis_x, plot_y + plot_height);
+            draw_line(&mut pinned_painter, y_axis_x, plot_y, y_axis_x, plot_y + plot_height);
             // Draw horizontal grid lines and horizontal (X) axis line
             let mut grid_pen2 = QPen::default();
             grid_pen2.set_color(&grid_color);
@@ -954,7 +926,7 @@ impl graph_object_qobject::GraphObject {
                 };
                 // tick mark (vertical small line)
                 let tick_len = 5.0;
-                pinned_painter.as_mut().draw_line(x_pixel, x_axis_y, x_pixel, x_axis_y - tick_len);
+                draw_line(&mut pinned_painter, x_pixel, x_axis_y, x_pixel, x_axis_y - tick_len);
                 // label
                 let label = self.as_ref().format_value(data_x_val);
                 // Position label: center except at ends
@@ -973,7 +945,7 @@ impl graph_object_qobject::GraphObject {
                     text_x = x_pixel - approx_width / 2.0;
                 }
                 let text_y = x_axis_y + 15.0;
-                pinned_painter.as_mut().draw_text(text_x, text_y, &label);
+                draw_text(&mut pinned_painter, text_x, text_y, &label);
             }
             // Y-axis ticks and labels (if not in separate series mode)
             if !this.separate_series {
@@ -1006,7 +978,7 @@ impl graph_object_qobject::GraphObject {
                     let approx_width = label_str.len() as f64 * 7.0;
                     let text_x = y_axis_x - approx_width - 2.0;
                     let text_y = y_pixel + 4.0;  // baseline at tick (approx center)
-                    pinned_painter.as_mut().draw_text(text_x, text_y, &label);
+                    draw_text(&mut pinned_painter, text_x, text_y, &label);
                 }
             }
             // Axis labels (units or names)
@@ -1017,7 +989,7 @@ impl graph_object_qobject::GraphObject {
                 let label_width = x_label_str.len() as f64 * 7.0;
                 let text_x = plot_x + plot_width / 2.0 - label_width / 2.0;
                 let text_y = x_axis_y + 35.0;
-                pinned_painter.as_mut().draw_text(text_x, text_y, &this.x_label);
+                draw_text(&mut pinned_painter, text_x, text_y, &this.x_label);
             }
             // Y-axis label (rotated vertical)
             if !this.y_label.to_string().is_empty() {
@@ -1030,7 +1002,7 @@ impl graph_object_qobject::GraphObject {
                 // Translate and rotate
                 pinned_painter.as_mut().translate(text_x, text_y);
                 pinned_painter.as_mut().rotate(-90.0);
-                pinned_painter.as_mut().draw_text(0.0, 0.0, &this.y_label);
+                draw_text(&mut pinned_painter, 0.0, 0.0, &this.y_label);
                 // Restore painter state
                 pinned_painter.as_mut().restore();
             }
@@ -1093,10 +1065,10 @@ impl graph_object_qobject::GraphObject {
                                     plot_y + plot_height - ((s.data_y[k + 1] - y_min_val) / (y_max_val - y_min_val)) * plot_height
                                 };
                                 // horizontal line at y_curr
-                                pinned_painter.as_mut().draw_line(x_curr, y_curr, x_next, y_curr);
+                                draw_line(&mut pinned_painter, x_curr, y_curr, x_next, y_curr);
                                 // vertical transition line at x_next
                                 if (s.data_y[k] - s.data_y[k + 1]).abs() > f64::EPSILON {
-                                    pinned_painter.as_mut().draw_line(x_next, y_curr, x_next, y_next);
+                                    draw_line(&mut pinned_painter, x_next, y_curr, x_next, y_next);
                                 }
                             }
                         } else {
@@ -1136,7 +1108,7 @@ impl graph_object_qobject::GraphObject {
                                 } else {
                                     plot_y + plot_height - ((s.data_y[k + 1] - y_min_val) / (y_max_val - y_min_val)) * plot_height
                                 };
-                                pinned_painter.as_mut().draw_line(x1, y1, x2, y2);
+                                draw_line(&mut pinned_painter, x1, y1, x2, y2);
                             }
                         }
                     }
@@ -1335,14 +1307,14 @@ impl graph_object_qobject::GraphObject {
                     legend_pen.set_style(PenStyle::SolidLine);
                     pinned_painter.as_mut().set_pen_with_pen(&legend_pen);
                     let line_y = legend_y + legend_padding + idx as f64 * entry_height + entry_height / 2.0;
-                    pinned_painter.as_mut().draw_line(legend_x + 5.0, line_y, legend_x + 15.0, line_y);
+                    draw_line(&mut pinned_painter, legend_x + 5.0, line_y, legend_x + 15.0, line_y);
                     // Text
                     let mut legend_text_pen = QPen::default();
                     legend_text_pen.set_color(&axis_color);
                     legend_text_pen.set_width(0);
                     legend_text_pen.set_style(PenStyle::SolidLine);
                     pinned_painter.as_mut().set_pen_with_pen(&legend_text_pen);
-                    pinned_painter.as_mut().draw_text(legend_x + 20.0, legend_y + legend_padding + idx as f64 * entry_height + 10.0, &text);
+                    draw_text(&mut pinned_painter, legend_x + 20.0, legend_y  + legend_padding + idx as f64 * entry_height + 10.0, &text);
                 }
             }
             // Draw cursor lines and differences
@@ -1361,7 +1333,7 @@ impl graph_object_qobject::GraphObject {
                     } else {
                         plot_x + ((*x_val - x_min_val) / (x_max_val - x_min_val)) * plot_width
                     };
-                    pinned_painter.as_mut().draw_line(x_pix, plot_y, x_pix, plot_y + plot_height);
+                    draw_line(&mut pinned_painter, x_pix, plot_y, x_pix, plot_y + plot_height);
                 }
             }
             // Horizontal cursors (if not separate series)
@@ -1375,7 +1347,7 @@ impl graph_object_qobject::GraphObject {
                         } else {
                             ((*y_val - y_min_val) / (y_max_val - y_min_val)) * plot_height
                         });
-                        pinned_painter.as_mut().draw_line(plot_x, y_pix, plot_x + plot_width, y_pix);
+                        draw_line(&mut pinned_painter, plot_x, y_pix, plot_x + plot_width, y_pix);
                     }
                 }
             }
@@ -1394,7 +1366,7 @@ impl graph_object_qobject::GraphObject {
                     let text_width = label.to_string().len() as f64 * 7.0;
                     let text_x = plot_x + plot_width / 2.0 - text_width / 2.0;
                     let text_y = plot_y + 15.0;
-                    pinned_painter.as_mut().draw_text(text_x, text_y, &label);
+                    draw_text(&mut pinned_painter, text_x, text_y, &label);
                 }
             }
             if !this.separate_series && this.cursor_y_positions.len() == 2 {
@@ -1422,7 +1394,7 @@ impl graph_object_qobject::GraphObject {
                         (y1_pix + y2_pix) / 2.0
                     };
                     let text_y = mid_y + 4.0;
-                    pinned_painter.as_mut().draw_text(text_x, text_y, &label);
+                    draw_text(&mut pinned_painter, text_x, text_y, &label);
                 }
             }
         }
