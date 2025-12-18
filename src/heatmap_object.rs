@@ -1,6 +1,6 @@
 // src/heatmap_object.rs
 use cxx_qt::{CxxQtType, Threading};
-use cxx_qt_lib::{QColor, QRectF, QSizeF, QString, QPointF};
+use cxx_qt_lib::{QColor, QPointF, QRectF, QSizeF, QString};
 use std::pin::Pin;
 
 #[cxx_qt::bridge]
@@ -16,6 +16,9 @@ pub mod heatmap_qobject {
         include!("cxx-qt-lib/qpointf.h");
         type QPointF = cxx_qt_lib::QPointF;
         type QRectF = cxx_qt_lib::QRectF;
+
+        include!(<QtQuick/QQuickItem>);
+        type QQuickItem;
         include!(<QtQuick/QQuickPaintedItem>);
         type QQuickPaintedItem;
     }
@@ -26,8 +29,6 @@ pub mod heatmap_qobject {
         fn fillRect(self: Pin<&mut QPainter>, rect: &QRectF, color: &QColor);
         #[rust_name = "draw_text"]
         fn drawText(self: Pin<&mut QPainter>, p: &QPointF, text: &QString);
-        #[rust_name = "set_render_hint"]
-        fn setRenderHint(self: Pin<&mut QPainter>, hint: i32, enabled: bool);
         #[rust_name = "save"]
         fn save(self: Pin<&mut QPainter>);
         #[rust_name = "restore"]
@@ -63,11 +64,46 @@ pub mod heatmap_qobject {
         #[cxx_override]
         unsafe fn paint(self: Pin<&mut HeatmapObject>, painter: *mut QPainter);
     }
+    // Custom constructor declaration (CXX-Qt generálja a C++ ctor-t QQuickItem* parenttel)
+    impl cxx_qt::Constructor<(*mut QQuickItem,), BaseArguments = (*mut QQuickItem,)> for HeatmapObject {}
+
     unsafe extern "RustQt" {
         #[inherit]
         fn update(self: Pin<&mut HeatmapObject>);
         #[inherit]
         fn size(self: &HeatmapObject) -> QSizeF;
+        #[inherit]
+        #[rust_name = "set_antialiasing"]
+        fn setAntialiasing(self: Pin<&mut HeatmapObject>, enabled: bool);
+    }
+}
+
+// ---- Custom constructor implementation (C++ helper nélkül) ------------------
+impl cxx_qt::Constructor<(*mut heatmap_qobject::QQuickItem,)> for heatmap_qobject::HeatmapObject {
+    type NewArguments = ();
+    type BaseArguments = (*mut heatmap_qobject::QQuickItem,);
+    type InitializeArguments = ();
+
+    fn route_arguments(
+        args: (*mut heatmap_qobject::QQuickItem,),
+    ) -> (
+        Self::NewArguments,
+        Self::BaseArguments,
+        Self::InitializeArguments,
+    ) {
+        // 1) Rust struct: default
+        // 2) Base ctor: QQuickPaintedItem(parent)
+        // 3) initialize: nincs extra arg
+        ((), args, ())
+    }
+
+    fn new((): ()) -> HeatmapObjectRust {
+        HeatmapObjectRust::default()
+    }
+
+    fn initialize(self: core::pin::Pin<&mut Self>, (): ()) {
+        // Ha kell AA (szebb text/line), itt kapcsold be.
+        self.set_antialiasing(true);
     }
 }
 
@@ -124,7 +160,15 @@ impl heatmap_qobject::HeatmapObject {
             if let Some(e_idx) = formatted.find('e') {
                 let (mantissa, exponent) = formatted.split_at(e_idx);
                 let mantissa_trim = mantissa.trim_end_matches('0').trim_end_matches('.');
-                return QString::from(&format!("{}{}", if mantissa_trim.is_empty() { "0" } else { mantissa_trim }, exponent));
+                return QString::from(&format!(
+                    "{}{}",
+                    if mantissa_trim.is_empty() {
+                        "0"
+                    } else {
+                        mantissa_trim
+                    },
+                    exponent
+                ));
             }
         } else if formatted.contains('.') {
             let trimmed = formatted.trim_end_matches('0').trim_end_matches('.');
@@ -195,17 +239,24 @@ impl heatmap_qobject::HeatmapObject {
             let mut pinned_painter = Pin::new_unchecked(painter);
             let binding = self.as_ref();
             let this = binding.rust();
-            let mut draw_text = |p: &mut Pin<&mut heatmap_qobject::QPainter>, x: f64, y: f64, text: &QString| {
-                let pt = QPointF::new(x, y);
-                p.as_mut().draw_text(&pt, text);
-            };
-            pinned_painter.as_mut().set_render_hint(1, true);
+            let mut draw_text =
+                |p: &mut Pin<&mut heatmap_qobject::QPainter>, x: f64, y: f64, text: &QString| {
+                    let pt = QPointF::new(x, y);
+                    p.as_mut().draw_text(&pt, text);
+                };
+           // pinned_painter.as_mut().set_render_hint(1, true);
             let size = self.size();
             let width = size.width();
             let height = size.height();
             // Fill background with appropriate color
-            let bg_color = if this.dark_mode { QColor::from_rgb(0, 0, 0) } else { QColor::from_rgb(255, 255, 255) };
-            pinned_painter.as_mut().fill_rect(&QRectF::new(0.0, 0.0, width, height), &bg_color);
+            let bg_color = if this.dark_mode {
+                QColor::from_rgb(0, 0, 0)
+            } else {
+                QColor::from_rgb(255, 255, 255)
+            };
+            pinned_painter
+                .as_mut()
+                .fill_rect(&QRectF::new(0.0, 0.0, width, height), &bg_color);
             let left_margin = 50.0;
             let right_margin = 20.0;
             let top_margin = 20.0;
@@ -225,8 +276,12 @@ impl heatmap_qobject::HeatmapObject {
             let mut val_min = std::f64::MAX;
             let mut val_max = std::f64::MIN;
             for val in &this.data {
-                if *val < val_min { val_min = *val; }
-                if *val > val_max { val_max = *val; }
+                if *val < val_min {
+                    val_min = *val;
+                }
+                if *val > val_max {
+                    val_max = *val;
+                }
             }
             if val_min == std::f64::MAX || val_max == std::f64::MIN {
                 val_min = 0.0;
@@ -240,9 +295,15 @@ impl heatmap_qobject::HeatmapObject {
             for yi in 0..this.grid_height {
                 for xi in 0..this.grid_width {
                     let idx = (yi * this.grid_width + xi) as usize;
-                    if idx >= this.data.len() { continue; }
+                    if idx >= this.data.len() {
+                        continue;
+                    }
                     let val = this.data[idx];
-                    let frac = if val_max > val_min { (val - val_min) / (val_max - val_min) } else { 0.0 };
+                    let frac = if val_max > val_min {
+                        (val - val_min) / (val_max - val_min)
+                    } else {
+                        0.0
+                    };
                     let (r, g, b) = if frac <= 0.5 {
                         // blue -> green
                         let t = frac * 2.0;
@@ -260,10 +321,19 @@ impl heatmap_qobject::HeatmapObject {
                 }
             }
             // Draw axes lines and tick labels
-            let axis_color = if this.dark_mode { QColor::from_rgb(255, 255, 255) } else { QColor::from_rgb(0, 0, 0) };
+            let axis_color = if this.dark_mode {
+                QColor::from_rgb(255, 255, 255)
+            } else {
+                QColor::from_rgb(0, 0, 0)
+            };
             // Axes lines
-            pinned_painter.as_mut().fill_rect(&QRectF::new(y_axis_x - 1.0, plot_y, 1.0, plot_height), &axis_color);
-            pinned_painter.as_mut().fill_rect(&QRectF::new(plot_x, x_axis_y, plot_width, 1.0), &axis_color);
+            pinned_painter.as_mut().fill_rect(
+                &QRectF::new(y_axis_x - 1.0, plot_y, 1.0, plot_height),
+                &axis_color,
+            );
+            pinned_painter
+                .as_mut()
+                .fill_rect(&QRectF::new(plot_x, x_axis_y, plot_width, 1.0), &axis_color);
             // Tick labels for X and Y
             let num_ticks = 5;
             for i in 0..num_ticks {
