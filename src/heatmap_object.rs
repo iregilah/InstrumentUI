@@ -1,6 +1,6 @@
 // src/heatmap_object.rs
 use cxx_qt::{CxxQtType, Threading};
-use cxx_qt_lib::{QColor, QRectF, QSizeF, QString};
+use cxx_qt_lib::{QColor, QRectF, QSizeF, QString, QPointF};
 use std::pin::Pin;
 
 #[cxx_qt::bridge]
@@ -13,8 +13,11 @@ pub mod heatmap_qobject {
         include!("cxx-qt-lib/qsizef.h");
         type QSizeF = cxx_qt_lib::QSizeF;
         include!("cxx-qt-lib/qrectf.h");
+        include!("cxx-qt-lib/qpointf.h");
+        type QPointF = cxx_qt_lib::QPointF;
         type QRectF = cxx_qt_lib::QRectF;
         include!(<QtQuick/QQuickPaintedItem>);
+        type QQuickPaintedItem;
     }
     unsafe extern "C++" {
         include!(<QtGui/QPainter>);
@@ -22,20 +25,28 @@ pub mod heatmap_qobject {
         #[rust_name = "fill_rect"]
         fn fillRect(self: Pin<&mut QPainter>, rect: &QRectF, color: &QColor);
         #[rust_name = "draw_text"]
-        fn drawText(self: Pin<&mut QPainter>, x: f64, y: f64, text: &QString);
+        fn drawText(self: Pin<&mut QPainter>, p: &QPointF, text: &QString);
         #[rust_name = "set_render_hint"]
         fn setRenderHint(self: Pin<&mut QPainter>, hint: i32, enabled: bool);
+        #[rust_name = "save"]
+        fn save(self: Pin<&mut QPainter>);
+        #[rust_name = "restore"]
+        fn restore(self: Pin<&mut QPainter>);
+        #[rust_name = "translate"]
+        fn translate(self: Pin<&mut QPainter>, dx: f64, dy: f64);
+        #[rust_name = "rotate"]
+        fn rotate(self: Pin<&mut QPainter>, angle: f64);
     }
     extern "RustQt" {
         #[qobject]
         #[qml_element]
-        #[base = "QQuickPaintedItem"]
-        #[qproperty(int, grid_width, cxx_name = "gridWidth")]
-        #[qproperty(int, grid_height, cxx_name = "gridHeight")]
-        #[qproperty(double, x_min, cxx_name = "xMin")]
-        #[qproperty(double, x_max, cxx_name = "xMax")]
-        #[qproperty(double, y_min, cxx_name = "yMin")]
-        #[qproperty(double, y_max, cxx_name = "yMax")]
+        #[base = QQuickPaintedItem]
+        #[qproperty(i32, grid_width, cxx_name = "gridWidth")]
+        #[qproperty(i32, grid_height, cxx_name = "gridHeight")]
+        #[qproperty(f64, x_min, cxx_name = "xMin")]
+        #[qproperty(f64, x_max, cxx_name = "xMax")]
+        #[qproperty(f64, y_min, cxx_name = "yMin")]
+        #[qproperty(f64, y_max, cxx_name = "yMax")]
         #[qproperty(QString, x_label, cxx_name = "xLabel")]
         #[qproperty(QString, y_label, cxx_name = "yLabel")]
         #[qproperty(bool, dark_mode, cxx_name = "darkMode")]
@@ -51,6 +62,12 @@ pub mod heatmap_qobject {
         fn clear_data(self: Pin<&mut HeatmapObject>);
         #[cxx_override]
         unsafe fn paint(self: Pin<&mut HeatmapObject>, painter: *mut QPainter);
+    }
+    unsafe extern "RustQt" {
+        #[inherit]
+        fn update(self: Pin<&mut HeatmapObject>);
+        #[inherit]
+        fn size(self: &HeatmapObject) -> QSizeF;
     }
 }
 
@@ -117,31 +134,44 @@ impl heatmap_qobject::HeatmapObject {
     }
 
     pub fn init_grid(mut self: Pin<&mut Self>, width: i32, height: i32) {
-        let mut this = self.as_mut().rust_mut();
         if width <= 0 || height <= 0 {
             return;
         }
-        this.grid_width = width;
-        this.grid_height = height;
-        this.data = vec![0.0; (width * height) as usize];
-        // Set default axes ranges if not set
-        if this.x_min >= this.x_max {
-            this.x_min = 0.0;
-            this.x_max = width as f64;
-            self.as_mut().set_x_min(this.x_min);
-            self.as_mut().set_x_max(this.x_max);
+        let mut x_update: Option<(f64, f64)> = None;
+        let mut y_update: Option<(f64, f64)> = None;
+
+        {
+            let mut this = self.as_mut().rust_mut();
+            this.grid_width = width;
+            this.grid_height = height;
+            this.data = vec![0.0; (width * height) as usize];
+
+            // Set default axes ranges if not set
+            if this.x_min >= this.x_max {
+                this.x_min = 0.0;
+                this.x_max = width as f64;
+                x_update = Some((this.x_min, this.x_max));
+            }
+            if this.y_min >= this.y_max {
+                this.y_min = 0.0;
+                this.y_max = height as f64;
+                y_update = Some((this.y_min, this.y_max));
+            }
         }
-        if this.y_min >= this.y_max {
-            this.y_min = 0.0;
-            this.y_max = height as f64;
-            self.as_mut().set_y_min(this.y_min);
-            self.as_mut().set_y_max(this.y_max);
+
+        if let Some((xmin, xmax)) = x_update {
+            self.as_mut().set_x_min(xmin);
+            self.as_mut().set_x_max(xmax);
+        }
+        if let Some((ymin, ymax)) = y_update {
+            self.as_mut().set_y_min(ymin);
+            self.as_mut().set_y_max(ymax);
         }
         self.update();
     }
 
     pub fn set_value(mut self: Pin<&mut Self>, x_index: i32, y_index: i32, value: f64) {
-        let this = self.as_mut().rust_mut();
+        let mut this = self.as_mut().rust_mut();
         if x_index < 0 || y_index < 0 || x_index >= this.grid_width || y_index >= this.grid_height {
             return;
         }
@@ -153,7 +183,7 @@ impl heatmap_qobject::HeatmapObject {
     }
 
     pub fn clear_data(mut self: Pin<&mut Self>) {
-        let this = self.as_mut().rust_mut();
+        let mut this = self.as_mut().rust_mut();
         for v in this.data.iter_mut() {
             *v = 0.0;
         }
@@ -164,6 +194,10 @@ impl heatmap_qobject::HeatmapObject {
         if let Some(painter) = painter.as_mut() {
             let mut pinned_painter = Pin::new_unchecked(painter);
             let this = self.as_ref().rust();
+            let mut draw_text = |p: &mut Pin<&mut heatmap_qobject::QPainter>, x: f64, y: f64, text: &QString| {
+                let pt = QPointF::new(x, y);
+                p.as_mut().draw_text(&pt, text);
+            };
             pinned_painter.as_mut().set_render_hint(1, true);
             let size = self.size();
             let width = size.width();
@@ -217,7 +251,7 @@ impl heatmap_qobject::HeatmapObject {
                         let t = (frac - 0.5) * 2.0;
                         ((255.0 * t) as u8, (255.0 * (1.0 - t)) as u8, 0u8)
                     };
-                    let color = QColor::from_rgb(r, g, b);
+                    let color = QColor::from_rgb(r as i32, g as i32, b as i32);
                     let cell_x = plot_x + xi as f64 * cell_w;
                     let cell_y = plot_y + plot_height - (yi as f64 + 1.0) * cell_h;
                     let rect = QRectF::new(cell_x, cell_y, cell_w + 0.5, cell_h + 0.5);
@@ -248,14 +282,14 @@ impl heatmap_qobject::HeatmapObject {
                 } else {
                     x_pixel - label_x_str.len() as f64 * 3.5
                 };
-                pinned_painter.as_mut().draw_text(text_x, x_axis_y + 15.0, &label_x);
+                draw_text(&mut pinned_painter, text_x, x_axis_y + 15.0, &label_x);
                 // Y labels (skip top to avoid cut)
                 if i < num_ticks - 1 {
                     let label_y = self.as_ref().format_value(data_y_val);
                     let label_y_str = label_y.to_string();
                     let text_y = y_pixel + 4.0;
                     let text_x_pos = y_axis_x - label_y_str.len() as f64 * 7.0 - 5.0;
-                    pinned_painter.as_mut().draw_text(text_x_pos, text_y, &label_y);
+                    draw_text(&mut pinned_painter, text_x_pos, text_y, &label_y);
                 }
             }
             // Axis labels
@@ -264,14 +298,14 @@ impl heatmap_qobject::HeatmapObject {
                 let label_w = x_label_str.len() as f64 * 7.0;
                 let text_x = plot_x + plot_width / 2.0 - label_w / 2.0;
                 let text_y = x_axis_y + 30.0;
-                pinned_painter.as_mut().draw_text(text_x, text_y, &this.x_label);
+                draw_text(&mut pinned_painter, text_x, text_y, &this.x_label);
             }
             if !this.y_label.to_string().is_empty() {
                 pinned_painter.as_mut().save();
                 let center_y = plot_y + plot_height / 2.0;
                 pinned_painter.as_mut().translate(plot_x - 40.0, center_y);
                 pinned_painter.as_mut().rotate(-90.0);
-                pinned_painter.as_mut().draw_text(0.0, 0.0, &this.y_label);
+                draw_text(&mut pinned_painter, 0.0, 0.0, &this.y_label);
                 pinned_painter.as_mut().restore();
             }
         }
