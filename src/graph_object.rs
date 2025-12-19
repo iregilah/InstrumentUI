@@ -1127,8 +1127,9 @@ impl graph_object_qobject::GraphObject {
     }
 
     unsafe fn paint(self: Pin<&mut Self>, painter: *mut graph_object_qobject::QPainter) {
-        let Some(painter) = unsafe { painter.as_mut() } else {
-            return;
+        let painter = match unsafe { painter.as_mut() } {
+            Some(p) => p,
+            None => return,
         };
         let mut pinned_painter = unsafe { Pin::new_unchecked(painter) };
         let binding = self.as_ref();
