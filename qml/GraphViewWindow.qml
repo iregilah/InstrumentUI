@@ -2,7 +2,7 @@
 import QtQuick 6.5
 import QtQuick.Controls 6.5
 import QtQuick.Layouts 1.15
-import QtQuick.Dialogs 1.3
+import QtQuick.Dialogs 6.5
 import InstrumentUI 1.0
 
 ApplicationWindow {
