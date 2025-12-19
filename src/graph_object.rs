@@ -1,7 +1,9 @@
 // src/graph_object.rs
 
 use cxx_qt::{CxxQtType, Threading};
-use cxx_qt_lib::{PenStyle, QPen, QColor, QRectF, QSizeF, QString, QPointF};
+use cxx_qt_lib::{
+    PenStyle, QColor, QLineF, QPainterRenderHint, QPen, QPoint, QRectF, QSizeF, QString,
+};
 use std::pin::Pin;
 
 #[cxx_qt::bridge]
@@ -16,41 +18,13 @@ pub mod graph_object_qobject {
         include!("cxx-qt-lib/qrectf.h");
         type QRectF = cxx_qt_lib::QRectF;
         include!("cxx-qt-lib/qpen.h");
-        include!("cxx-qt-lib/qpointf.h");
-        type QPointF = cxx_qt_lib::QPointF;
         type QPen = cxx_qt_lib::QPen;
+        include!("cxx-qt-lib/qpainter.h");
+        type QPainter = cxx_qt_lib::QPainter;
         include!(<QtQuick/QQuickPaintedItem>);
         type QQuickPaintedItem;
         include!(<QtQuick/QQuickItem>);
         type QQuickItem;
-    }
-    unsafe extern "C++" {
-        include!(<QtGui/QPainter>);
-        type QPainter;
-        // Qt-ban NINCS drawLine(double,double,double,double) overload.
-        // Használjuk a QPointF overloadot:
-        #[rust_name = "draw_line"]
-        fn drawLine(self: Pin<&mut QPainter>, p1: &QPointF, p2: &QPointF);
-        // Qt-ban NINCS drawText(double,double,QString) overload.
-        // Használjuk a QPointF overloadot:
-        #[rust_name = "draw_text"]
-        fn drawText(self: Pin<&mut QPainter>, p: &QPointF, text: &QString);
-        #[rust_name = "draw_ellipse"]
-        fn drawEllipse(self: Pin<&mut QPainter>, rect: &QRectF);
-        // #[rust_name = "set_render_hint"]
-        //fn setRenderHint(self: Pin<&mut QPainter>, hint: i32, enabled: bool);
-        #[rust_name = "fill_rect"]
-        fn fillRect(self: Pin<&mut QPainter>, rect: &QRectF, color: &QColor);
-        #[rust_name = "set_pen_with_pen"]
-        fn setPen(self: Pin<&mut QPainter>, pen: &QPen);
-        #[rust_name = "save"]
-        fn save(self: Pin<&mut QPainter>);
-        #[rust_name = "restore"]
-        fn restore(self: Pin<&mut QPainter>);
-        #[rust_name = "translate"]
-        fn translate(self: Pin<&mut QPainter>, dx: f64, dy: f64);
-        #[rust_name = "rotate"]
-        fn rotate(self: Pin<&mut QPainter>, angle: f64);
     }
 
     extern "RustQt" {
@@ -78,14 +52,19 @@ pub mod graph_object_qobject {
     }
     impl cxx_qt::Threading for GraphObject {}
 
-    impl cxx_qt::Constructor<
-        (*mut QQuickItem,),
-        BaseArguments=(*mut QQuickItem,)
-    > for GraphObject {}
+    impl cxx_qt::Constructor<(*mut QQuickItem,), BaseArguments = (*mut QQuickItem,)> for GraphObject {}
 
     extern "RustQt" {
         #[qinvokable]
-        fn add_series(self: Pin<&mut GraphObject>, name: &QString, series_type: i32, color: &QColor, thickness: f64, line_style: i32, marker: bool);
+        fn add_series(
+            self: Pin<&mut GraphObject>,
+            name: &QString,
+            series_type: i32,
+            color: &QColor,
+            thickness: f64,
+            line_style: i32,
+            marker: bool,
+        );
         #[qinvokable]
         fn remove_series(self: Pin<&mut GraphObject>, name: &QString);
         #[qinvokable]
@@ -143,13 +122,19 @@ pub mod graph_object_qobject {
 }
 
 // Custom constructor implementáció (QQuickItem* parent)
-impl cxx_qt::Constructor<(*mut graph_object_qobject::QQuickItem,)> for graph_object_qobject::GraphObject {
+impl cxx_qt::Constructor<(*mut graph_object_qobject::QQuickItem,)>
+    for graph_object_qobject::GraphObject
+{
     type NewArguments = ();
     type BaseArguments = (*mut graph_object_qobject::QQuickItem,);
     type InitializeArguments = ();
     fn route_arguments(
         arguments: (*mut graph_object_qobject::QQuickItem,),
-    ) -> (Self::NewArguments, Self::BaseArguments, Self::InitializeArguments) {
+    ) -> (
+        Self::NewArguments,
+        Self::BaseArguments,
+        Self::InitializeArguments,
+    ) {
         ((), arguments, ())
     }
 
@@ -198,7 +183,7 @@ pub struct GraphObjectRust {
     x_max: f64,
     y_min: f64,
     y_max: f64,
-    mode: i32,            // 0: mode1 (compress), 1: mode2 (scroll), 2: mode3 (triggered)
+    mode: i32, // 0: mode1 (compress), 1: mode2 (scroll), 2: mode3 (triggered)
     separate_series: bool,
     buffer_size: i32,
     dark_mode: bool,
@@ -291,7 +276,11 @@ impl graph_object_qobject::GraphObject {
                 if i > 0 {
                     writeln!(file).ok();
                 }
-                let header_x = if !this.x_label.to_string().is_empty() { this.x_label.to_string() } else { "X".to_owned() };
+                let header_x = if !this.x_label.to_string().is_empty() {
+                    this.x_label.to_string()
+                } else {
+                    "X".to_owned()
+                };
                 let header_y = s.name.clone();
                 writeln!(file, "{},{}", header_x, header_y).ok();
                 for (x, y) in s.data_x.iter().zip(&s.data_y) {
@@ -305,8 +294,14 @@ impl graph_object_qobject::GraphObject {
         let this = binding.rust();
         let mut csv = String::new();
         for (i, s) in this.series_list.iter().enumerate() {
-            if i > 0 { csv.push('\n'); }
-            let header_x = if !this.x_label.to_string().is_empty() { this.x_label.to_string() } else { "X".to_owned() };
+            if i > 0 {
+                csv.push('\n');
+            }
+            let header_x = if !this.x_label.to_string().is_empty() {
+                this.x_label.to_string()
+            } else {
+                "X".to_owned()
+            };
             csv += &format!("{},{}\n", header_x, s.name);
             for (x, y) in s.data_x.iter().zip(&s.data_y) {
                 csv += &format!("{:.6},{:.6}\n", x, y);
@@ -413,8 +408,12 @@ impl graph_object_qobject::GraphObject {
                 let mut max_y = f64::NEG_INFINITY;
                 for s in &this.series_list {
                     if !s.data_y.is_empty() {
-                        if s.min_y < min_y { min_y = s.min_y; }
-                        if s.max_y > max_y { max_y = s.max_y; }
+                        if s.min_y < min_y {
+                            min_y = s.min_y;
+                        }
+                        if s.max_y > max_y {
+                            max_y = s.max_y;
+                        }
                     }
                 }
                 if !min_y.is_finite() {
@@ -429,7 +428,10 @@ impl graph_object_qobject::GraphObject {
             }
 
             // If adding first series with no data, set some defaults for x axis (0..1)
-            if this.x_auto_range && this.series_list.len() == 1 && this.series_list[0].data_x.is_empty() {
+            if this.x_auto_range
+                && this.series_list.len() == 1
+                && this.series_list[0].data_x.is_empty()
+            {
                 this.x_min = 0.0;
                 this.x_max = 1.0;
                 x_range_update = Some((0.0, 1.0));
@@ -465,12 +467,20 @@ impl graph_object_qobject::GraphObject {
                 let mut new_y_max = f64::NEG_INFINITY;
                 for s in &this.series_list {
                     if let (Some(first), Some(last)) = (s.data_x.first(), s.data_x.last()) {
-                        if *first < new_x_min { new_x_min = *first; }
-                        if *last > new_x_max { new_x_max = *last; }
+                        if *first < new_x_min {
+                            new_x_min = *first;
+                        }
+                        if *last > new_x_max {
+                            new_x_max = *last;
+                        }
                     }
                     if !s.data_y.is_empty() {
-                        if s.min_y < new_y_min { new_y_min = s.min_y; }
-                        if s.max_y > new_y_max { new_y_max = s.max_y; }
+                        if s.min_y < new_y_min {
+                            new_y_min = s.min_y;
+                        }
+                        if s.max_y > new_y_max {
+                            new_y_max = s.max_y;
+                        }
                     }
                 }
                 if !new_x_min.is_finite() || !new_x_max.is_finite() {
@@ -522,7 +532,11 @@ impl graph_object_qobject::GraphObject {
         {
             let mut this = self.as_mut().rust_mut();
 
-            let idx = match this.series_list.iter().position(|s| s.name == series_name_str) {
+            let idx = match this
+                .series_list
+                .iter()
+                .position(|s| s.name == series_name_str)
+            {
                 Some(i) => i,
                 None => return,
             };
@@ -545,8 +559,12 @@ impl graph_object_qobject::GraphObject {
                     series.min_y = py;
                     series.max_y = py;
                 } else {
-                    if py < series.min_y { series.min_y = py; }
-                    if py > series.max_y { series.max_y = py; }
+                    if py < series.min_y {
+                        series.min_y = py;
+                    }
+                    if py > series.max_y {
+                        series.max_y = py;
+                    }
                 }
             }
 
@@ -583,8 +601,12 @@ impl graph_object_qobject::GraphObject {
                                     let mut s_min = f64::INFINITY;
                                     let mut s_max = f64::NEG_INFINITY;
                                     for &vy in &s2.data_y {
-                                        if vy < s_min { s_min = vy; }
-                                        if vy > s_max { s_max = vy; }
+                                        if vy < s_min {
+                                            s_min = vy;
+                                        }
+                                        if vy > s_max {
+                                            s_max = vy;
+                                        }
                                     }
                                     s2.min_y = s_min;
                                     s2.max_y = s_max;
@@ -596,13 +618,22 @@ impl graph_object_qobject::GraphObject {
                         let mut xmin_all = f64::INFINITY;
                         let mut xmax_all = f64::NEG_INFINITY;
                         for s2 in &this.series_list {
-                            if let (Some(first), Some(last)) = (s2.data_x.first(), s2.data_x.last()) {
-                                if *first < xmin_all { xmin_all = *first; }
-                                if *last > xmax_all { xmax_all = *last; }
+                            if let (Some(first), Some(last)) = (s2.data_x.first(), s2.data_x.last())
+                            {
+                                if *first < xmin_all {
+                                    xmin_all = *first;
+                                }
+                                if *last > xmax_all {
+                                    xmax_all = *last;
+                                }
                             }
                         }
-                        if !xmin_all.is_finite() { xmin_all = this.x_min; }
-                        if !xmax_all.is_finite() { xmax_all = this.x_max; }
+                        if !xmin_all.is_finite() {
+                            xmin_all = this.x_min;
+                        }
+                        if !xmax_all.is_finite() {
+                            xmax_all = this.x_max;
+                        }
 
                         this.x_min = xmin_all;
                         this.x_max = xmax_all;
@@ -658,8 +689,12 @@ impl graph_object_qobject::GraphObject {
                 let mut new_y_max = f64::NEG_INFINITY;
                 for s2 in &this.series_list {
                     if !s2.data_y.is_empty() {
-                        if s2.min_y < new_y_min { new_y_min = s2.min_y; }
-                        if s2.max_y > new_y_max { new_y_max = s2.max_y; }
+                        if s2.min_y < new_y_min {
+                            new_y_min = s2.min_y;
+                        }
+                        if s2.max_y > new_y_max {
+                            new_y_max = s2.max_y;
+                        }
                     }
                 }
                 if !new_y_min.is_finite() {
@@ -854,12 +889,20 @@ impl graph_object_qobject::GraphObject {
 
             for s in &this.series_list {
                 if let (Some(first), Some(last)) = (s.data_x.first(), s.data_x.last()) {
-                    if *first < xmin_all { xmin_all = *first; }
-                    if *last > xmax_all { xmax_all = *last; }
+                    if *first < xmin_all {
+                        xmin_all = *first;
+                    }
+                    if *last > xmax_all {
+                        xmax_all = *last;
+                    }
                 }
                 if !s.data_y.is_empty() {
-                    if s.min_y < ymin_all { ymin_all = s.min_y; }
-                    if s.max_y > ymax_all { ymax_all = s.max_y; }
+                    if s.min_y < ymin_all {
+                        ymin_all = s.min_y;
+                    }
+                    if s.max_y > ymax_all {
+                        ymax_all = s.max_y;
+                    }
                 }
             }
             if !xmin_all.is_finite() || !xmax_all.is_finite() {
@@ -902,27 +945,53 @@ impl graph_object_qobject::GraphObject {
             let this = binding.rust();
             // --- kis helperek, hogy ne kelljen mindenhol QPointF-et kézzel gyártani ---
             let mut draw_line = |p: &mut Pin<&mut graph_object_qobject::QPainter>,
-                                 x1: f64, y1: f64, x2: f64, y2: f64| {
-                let p1 = QPointF::new(x1, y1);
-                let p2 = QPointF::new(x2, y2);
-                p.as_mut().draw_line(&p1, &p2);
+                                 x1: f64,
+                                 y1: f64,
+                                 x2: f64,
+                                 y2: f64| {
+                // cxx-qt-lib: QPainter::draw_linef(&QLineF)
+                let mut line = QLineF::default();
+                line.set_line(x1, y1, x2, y2);
+                p.as_mut().draw_linef(&line);
             };
             let mut draw_text = |p: &mut Pin<&mut graph_object_qobject::QPainter>,
-                                 x: f64, y: f64, text: &QString| {
-                let pt = QPointF::new(x, y);
+                                 x: f64,
+                                 y: f64,
+                                 text: &QString| {
+                // cxx-qt-lib: QPainter::draw_text(&QPoint, &QString)
+                let pt = QPoint::new(x.round() as i32, y.round() as i32);
                 p.as_mut().draw_text(&pt, text);
             };
+
+            // Render hints (a korábbi "int hint" helyett típushelyesen)
+            pinned_painter
+                .as_mut()
+                .set_render_hint(QPainterRenderHint::Antialiasing, true);
+            pinned_painter
+                .as_mut()
+                .set_render_hint(QPainterRenderHint::TextAntialiasing, true);
+
             // Determine dimensions
             let size = self.size();
             let width = size.width();
             let height = size.height();
             // Fill background
-            let bg_color = if this.dark_mode { QColor::from_rgb(0, 0, 0) } else { QColor::from_rgb(255, 255, 255) };
-            pinned_painter.as_mut().fill_rect(&QRectF::new(0.0, 0.0, width, height), &bg_color);
+            let bg_color = if this.dark_mode {
+                QColor::from_rgb(0, 0, 0)
+            } else {
+                QColor::from_rgb(255, 255, 255)
+            };
+            pinned_painter
+                .as_mut()
+                .fill_rect(&QRectF::new(0.0, 0.0, width, height), &bg_color);
             // Define margins for axes and legend
             let left_margin: f64 = 60.0;
             let right_margin: f64 = 10.0;
-            let top_margin: f64 = if this.legend_visible && this.legend_position < 2 { 20.0 } else { 10.0 };
+            let top_margin: f64 = if this.legend_visible && this.legend_position < 2 {
+                20.0
+            } else {
+                10.0
+            };
             let bottom_margin: f64 = 50.0;
             // Compute drawing area for data
             let plot_x = left_margin;
@@ -930,14 +999,18 @@ impl graph_object_qobject::GraphObject {
             let plot_width = (width - left_margin - right_margin).max(1.0);
             let plot_height = (height - top_margin - bottom_margin).max(1.0);
             // Axes positions
-            let x_axis_y = plot_y + plot_height;  // y coordinate of X axis line (bottom of plot area)
-            let y_axis_x = plot_x;                // x coordinate of Y axis line (left of plot area)
+            let x_axis_y = plot_y + plot_height; // y coordinate of X axis line (bottom of plot area)
+            let y_axis_x = plot_x; // x coordinate of Y axis line (left of plot area)
             // Determine effective min/max for log scales (avoid <=0)
             let (x_min_val, x_max_val) = if this.x_log_scale {
                 if this.x_max <= 0.0 {
                     (0.1, 1.0)
                 } else {
-                    let min_val = if this.x_min > 0.0 { this.x_min } else { (this.x_max / 1e6).max(1e-9) };
+                    let min_val = if this.x_min > 0.0 {
+                        this.x_min
+                    } else {
+                        (this.x_max / 1e6).max(1e-9)
+                    };
                     (min_val, this.x_max)
                 }
             } else {
@@ -947,7 +1020,11 @@ impl graph_object_qobject::GraphObject {
                 if this.y_max <= 0.0 {
                     (0.1, 1.0)
                 } else {
-                    let min_val = if this.y_min > 0.0 { this.y_min } else { (this.y_max / 1e6).max(1e-9) };
+                    let min_val = if this.y_min > 0.0 {
+                        this.y_min
+                    } else {
+                        (this.y_max / 1e6).max(1e-9)
+                    };
                     (min_val, this.y_max)
                 }
             } else {
@@ -955,15 +1032,27 @@ impl graph_object_qobject::GraphObject {
             };
             // Draw grid (if enabled) and axes lines
             // Set pen for grid and axis lines (color gray for grid, white/black for axes)
-            let axis_color = if this.dark_mode { QColor::from_rgb(255, 255, 255) } else { QColor::from_rgb(0, 0, 0) };
-            let grid_color = if this.dark_mode { QColor::from_rgb(136, 136, 136) } else { QColor::from_rgb(136, 136, 136) };
+            let axis_color = if this.dark_mode {
+                QColor::from_rgb(255, 255, 255)
+            } else {
+                QColor::from_rgb(0, 0, 0)
+            };
+            let grid_color = if this.dark_mode {
+                QColor::from_rgb(136, 136, 136)
+            } else {
+                QColor::from_rgb(136, 136, 136)
+            };
             // Draw vertical grid lines and vertical (Y) axis line
             let mut grid_pen = QPen::default();
             grid_pen.set_color(&grid_color);
             grid_pen.set_width(0);
-            let grid_pen_style = if this.grid_visible { PenStyle::DashLine } else { PenStyle::SolidLine };
+            let grid_pen_style = if this.grid_visible {
+                PenStyle::DashLine
+            } else {
+                PenStyle::SolidLine
+            };
             grid_pen.set_style(grid_pen_style);
-            pinned_painter.as_mut().set_pen_with_pen(&grid_pen);
+            pinned_painter.as_mut().set_pen(&grid_pen);
             let num_x_ticks = 5;
             for i in 0..num_x_ticks {
                 let t = i as f64 / (num_x_ticks - 1) as f64;
@@ -983,7 +1072,13 @@ impl graph_object_qobject::GraphObject {
                 };
                 if this.grid_visible {
                     // vertical grid line
-                    draw_line(&mut pinned_painter, x_pixel, plot_y, x_pixel, plot_y + plot_height);
+                    draw_line(
+                        &mut pinned_painter,
+                        x_pixel,
+                        plot_y,
+                        x_pixel,
+                        plot_y + plot_height,
+                    );
                 }
             }
             // Vertical axis line (left)
@@ -991,15 +1086,25 @@ impl graph_object_qobject::GraphObject {
             axis_pen.set_color(&axis_color);
             axis_pen.set_width(0);
             axis_pen.set_style(PenStyle::SolidLine);
-            pinned_painter.as_mut().set_pen_with_pen(&axis_pen);
-            draw_line(&mut pinned_painter, y_axis_x, plot_y, y_axis_x, plot_y + plot_height);
+            pinned_painter.as_mut().set_pen(&axis_pen);
+            draw_line(
+                &mut pinned_painter,
+                y_axis_x,
+                plot_y,
+                y_axis_x,
+                plot_y + plot_height,
+            );
             // Draw horizontal grid lines and horizontal (X) axis line
             let mut grid_pen2 = QPen::default();
             grid_pen2.set_color(&grid_color);
             grid_pen2.set_width(0);
-            let grid_pen2_style = if this.grid_visible { PenStyle::DashLine } else { PenStyle::SolidLine };
+            let grid_pen2_style = if this.grid_visible {
+                PenStyle::DashLine
+            } else {
+                PenStyle::SolidLine
+            };
             grid_pen2.set_style(grid_pen2_style);
-            pinned_painter.as_mut().set_pen_with_pen(&grid_pen2);
+            pinned_painter.as_mut().set_pen(&grid_pen2);
             let num_y_ticks = 5;
             for j in 0..num_y_ticks {
                 let t = j as f64 / (num_y_ticks - 1) as f64;
@@ -1010,16 +1115,23 @@ impl graph_object_qobject::GraphObject {
                 } else {
                     y_min_val + t * (y_max_val - y_min_val)
                 };
-                let y_pixel = plot_y + plot_height - (if this.y_log_scale {
-                    let log_min = y_min_val.log10();
-                    let log_max = y_max_val.log10();
-                    ((data_y_val.log10() - log_min) / (log_max - log_min)) * plot_height
-                } else {
-                    ((data_y_val - y_min_val) / (y_max_val - y_min_val)) * plot_height
-                });
+                let y_pixel = plot_y + plot_height
+                    - (if this.y_log_scale {
+                        let log_min = y_min_val.log10();
+                        let log_max = y_max_val.log10();
+                        ((data_y_val.log10() - log_min) / (log_max - log_min)) * plot_height
+                    } else {
+                        ((data_y_val - y_min_val) / (y_max_val - y_min_val)) * plot_height
+                    });
                 if this.grid_visible && !this.separate_series {
                     // horizontal grid line
-                    draw_line(&mut pinned_painter, plot_x, y_pixel, plot_x + plot_width, y_pixel);
+                    draw_line(
+                        &mut pinned_painter,
+                        plot_x,
+                        y_pixel,
+                        plot_x + plot_width,
+                        y_pixel,
+                    );
                 }
             }
             // Horizontal axis line (bottom)
@@ -1027,14 +1139,20 @@ impl graph_object_qobject::GraphObject {
             axis_pen2.set_color(&axis_color);
             axis_pen2.set_width(0);
             axis_pen2.set_style(PenStyle::SolidLine);
-            pinned_painter.as_mut().set_pen_with_pen(&axis_pen2);
-            draw_line(&mut pinned_painter, plot_x, x_axis_y, plot_x + plot_width, x_axis_y);
+            pinned_painter.as_mut().set_pen(&axis_pen2);
+            draw_line(
+                &mut pinned_painter,
+                plot_x,
+                x_axis_y,
+                plot_x + plot_width,
+                x_axis_y,
+            );
             // Draw tick marks and labels
             let mut axis_pen3 = QPen::default();
             axis_pen3.set_color(&axis_color);
             axis_pen3.set_width(0);
             axis_pen3.set_style(PenStyle::SolidLine);
-            pinned_painter.as_mut().set_pen_with_pen(&axis_pen3);
+            pinned_painter.as_mut().set_pen(&axis_pen3);
             // X-axis ticks and labels
             for i in 0..num_x_ticks {
                 let t = i as f64 / (num_x_ticks - 1) as f64;
@@ -1054,7 +1172,13 @@ impl graph_object_qobject::GraphObject {
                 };
                 // tick mark (vertical small line)
                 let tick_len = 5.0;
-                draw_line(&mut pinned_painter, x_pixel, x_axis_y, x_pixel, x_axis_y - tick_len);
+                draw_line(
+                    &mut pinned_painter,
+                    x_pixel,
+                    x_axis_y,
+                    x_pixel,
+                    x_axis_y - tick_len,
+                );
                 // label
                 let label = self.as_ref().format_value(data_x_val);
                 // Position label: center except at ends
@@ -1086,16 +1210,23 @@ impl graph_object_qobject::GraphObject {
                     } else {
                         y_min_val + t * (y_max_val - y_min_val)
                     };
-                    let y_pixel = plot_y + plot_height - (if this.y_log_scale {
-                        let log_min = y_min_val.log10();
-                        let log_max = y_max_val.log10();
-                        ((data_y_val.log10() - log_min) / (log_max - log_min)) * plot_height
-                    } else {
-                        ((data_y_val - y_min_val) / (y_max_val - y_min_val)) * plot_height
-                    });
+                    let y_pixel = plot_y + plot_height
+                        - (if this.y_log_scale {
+                            let log_min = y_min_val.log10();
+                            let log_max = y_max_val.log10();
+                            ((data_y_val.log10() - log_min) / (log_max - log_min)) * plot_height
+                        } else {
+                            ((data_y_val - y_min_val) / (y_max_val - y_min_val)) * plot_height
+                        });
                     // tick mark (horizontal small line)
                     let tick_len = 5.0;
-                    draw_line(&mut pinned_painter, y_axis_x, y_pixel, y_axis_x + tick_len, y_pixel);
+                    draw_line(
+                        &mut pinned_painter,
+                        y_axis_x,
+                        y_pixel,
+                        y_axis_x + tick_len,
+                        y_pixel,
+                    );
                     // label, skip top label to avoid cut off
                     if j == num_y_ticks - 1 {
                         continue;
@@ -1105,7 +1236,7 @@ impl graph_object_qobject::GraphObject {
                     // Right-align label to just left of axis line
                     let approx_width = label_str.len() as f64 * 7.0;
                     let text_x = y_axis_x - approx_width - 2.0;
-                    let text_y = y_pixel + 4.0;  // baseline at tick (approx center)
+                    let text_y = y_pixel + 4.0; // baseline at tick (approx center)
                     draw_text(&mut pinned_painter, text_x, text_y, &label);
                 }
             }
@@ -1128,7 +1259,8 @@ impl graph_object_qobject::GraphObject {
                 let text_x = 15.0;
                 let text_y = center_y;
                 // Translate and rotate
-                pinned_painter.as_mut().translate(text_x, text_y);
+                let offset = QPoint::new(text_x.round() as i32, text_y.round() as i32);
+                pinned_painter.as_mut().translate(&offset);
                 pinned_painter.as_mut().rotate(-90.0);
                 draw_text(&mut pinned_painter, 0.0, 0.0, &this.y_label);
                 // Restore painter state
@@ -1143,7 +1275,11 @@ impl graph_object_qobject::GraphObject {
                 let style_val = if s.line_style <= 0 { 1 } else { s.line_style };
                 let mut pen = QPen::default();
                 pen.set_color(&s.color);
-                let width_i = if s.thickness <= 0.0 { 1 } else { s.thickness.round() as i32 };
+                let width_i = if s.thickness <= 0.0 {
+                    1
+                } else {
+                    s.thickness.round() as i32
+                };
                 pen.set_width(width_i);
                 let pen_style = match style_val {
                     2 => PenStyle::DashLine,
@@ -1153,7 +1289,7 @@ impl graph_object_qobject::GraphObject {
                     _ => PenStyle::SolidLine,
                 };
                 pen.set_style(pen_style);
-                pinned_painter.as_mut().set_pen_with_pen(&pen);
+                pinned_painter.as_mut().set_pen(&pen);
                 if !this.separate_series {
                     // Draw connecting lines
                     if s.data_x.len() > 1 {
@@ -1161,36 +1297,62 @@ impl graph_object_qobject::GraphObject {
                             // digital: draw steps
                             for k in 0..(s.data_x.len() - 1) {
                                 let x_curr = if this.x_log_scale {
-                                    if s.data_x[k] <= 0.0 { continue; }
+                                    if s.data_x[k] <= 0.0 {
+                                        continue;
+                                    }
                                     let log_min = x_min_val.log10();
                                     let log_max = x_max_val.log10();
-                                    plot_x + ((s.data_x[k].log10() - log_min) / (log_max - log_min)) * plot_width
+                                    plot_x
+                                        + ((s.data_x[k].log10() - log_min) / (log_max - log_min))
+                                            * plot_width
                                 } else {
-                                    plot_x + ((s.data_x[k] - x_min_val) / (x_max_val - x_min_val)) * plot_width
+                                    plot_x
+                                        + ((s.data_x[k] - x_min_val) / (x_max_val - x_min_val))
+                                            * plot_width
                                 };
                                 let x_next = if this.x_log_scale {
-                                    if s.data_x[k + 1] <= 0.0 { continue; }
+                                    if s.data_x[k + 1] <= 0.0 {
+                                        continue;
+                                    }
                                     let log_min = x_min_val.log10();
                                     let log_max = x_max_val.log10();
-                                    plot_x + ((s.data_x[k + 1].log10() - log_min) / (log_max - log_min)) * plot_width
+                                    plot_x
+                                        + ((s.data_x[k + 1].log10() - log_min)
+                                            / (log_max - log_min))
+                                            * plot_width
                                 } else {
-                                    plot_x + ((s.data_x[k + 1] - x_min_val) / (x_max_val - x_min_val)) * plot_width
+                                    plot_x
+                                        + ((s.data_x[k + 1] - x_min_val) / (x_max_val - x_min_val))
+                                            * plot_width
                                 };
                                 let y_curr = if this.y_log_scale {
-                                    if s.data_y[k] <= 0.0 { continue; }
+                                    if s.data_y[k] <= 0.0 {
+                                        continue;
+                                    }
                                     let log_min = y_min_val.log10();
                                     let log_max = y_max_val.log10();
-                                    plot_y + plot_height - ((s.data_y[k].log10() - log_min) / (log_max - log_min)) * plot_height
+                                    plot_y + plot_height
+                                        - ((s.data_y[k].log10() - log_min) / (log_max - log_min))
+                                            * plot_height
                                 } else {
-                                    plot_y + plot_height - ((s.data_y[k] - y_min_val) / (y_max_val - y_min_val)) * plot_height
+                                    plot_y + plot_height
+                                        - ((s.data_y[k] - y_min_val) / (y_max_val - y_min_val))
+                                            * plot_height
                                 };
                                 let y_next = if this.y_log_scale {
-                                    if s.data_y[k + 1] <= 0.0 { continue; }
+                                    if s.data_y[k + 1] <= 0.0 {
+                                        continue;
+                                    }
                                     let log_min = y_min_val.log10();
                                     let log_max = y_max_val.log10();
-                                    plot_y + plot_height - ((s.data_y[k + 1].log10() - log_min) / (log_max - log_min)) * plot_height
+                                    plot_y + plot_height
+                                        - ((s.data_y[k + 1].log10() - log_min)
+                                            / (log_max - log_min))
+                                            * plot_height
                                 } else {
-                                    plot_y + plot_height - ((s.data_y[k + 1] - y_min_val) / (y_max_val - y_min_val)) * plot_height
+                                    plot_y + plot_height
+                                        - ((s.data_y[k + 1] - y_min_val) / (y_max_val - y_min_val))
+                                            * plot_height
                                 };
                                 // horizontal line at y_curr
                                 draw_line(&mut pinned_painter, x_curr, y_curr, x_next, y_curr);
@@ -1202,39 +1364,61 @@ impl graph_object_qobject::GraphObject {
                         } else {
                             // analog: straight lines between points
                             for k in 0..(s.data_x.len() - 1) {
-                                if this.x_log_scale && (s.data_x[k] <= 0.0 || s.data_x[k + 1] <= 0.0) {
+                                if this.x_log_scale
+                                    && (s.data_x[k] <= 0.0 || s.data_x[k + 1] <= 0.0)
+                                {
                                     continue;
                                 }
-                                if this.y_log_scale && (s.data_y[k] <= 0.0 || s.data_y[k + 1] <= 0.0) {
+                                if this.y_log_scale
+                                    && (s.data_y[k] <= 0.0 || s.data_y[k + 1] <= 0.0)
+                                {
                                     continue;
                                 }
                                 let x1 = if this.x_log_scale {
                                     let log_min = x_min_val.log10();
                                     let log_max = x_max_val.log10();
-                                    plot_x + ((s.data_x[k].log10() - log_min) / (log_max - log_min)) * plot_width
+                                    plot_x
+                                        + ((s.data_x[k].log10() - log_min) / (log_max - log_min))
+                                            * plot_width
                                 } else {
-                                    plot_x + ((s.data_x[k] - x_min_val) / (x_max_val - x_min_val)) * plot_width
+                                    plot_x
+                                        + ((s.data_x[k] - x_min_val) / (x_max_val - x_min_val))
+                                            * plot_width
                                 };
                                 let x2 = if this.x_log_scale {
                                     let log_min = x_min_val.log10();
                                     let log_max = x_max_val.log10();
-                                    plot_x + ((s.data_x[k + 1].log10() - log_min) / (log_max - log_min)) * plot_width
+                                    plot_x
+                                        + ((s.data_x[k + 1].log10() - log_min)
+                                            / (log_max - log_min))
+                                            * plot_width
                                 } else {
-                                    plot_x + ((s.data_x[k + 1] - x_min_val) / (x_max_val - x_min_val)) * plot_width
+                                    plot_x
+                                        + ((s.data_x[k + 1] - x_min_val) / (x_max_val - x_min_val))
+                                            * plot_width
                                 };
                                 let y1 = if this.y_log_scale {
                                     let log_min = y_min_val.log10();
                                     let log_max = y_max_val.log10();
-                                    plot_y + plot_height - ((s.data_y[k].log10() - log_min) / (log_max - log_min)) * plot_height
+                                    plot_y + plot_height
+                                        - ((s.data_y[k].log10() - log_min) / (log_max - log_min))
+                                            * plot_height
                                 } else {
-                                    plot_y + plot_height - ((s.data_y[k] - y_min_val) / (y_max_val - y_min_val)) * plot_height
+                                    plot_y + plot_height
+                                        - ((s.data_y[k] - y_min_val) / (y_max_val - y_min_val))
+                                            * plot_height
                                 };
                                 let y2 = if this.y_log_scale {
                                     let log_min = y_min_val.log10();
                                     let log_max = y_max_val.log10();
-                                    plot_y + plot_height - ((s.data_y[k + 1].log10() - log_min) / (log_max - log_min)) * plot_height
+                                    plot_y + plot_height
+                                        - ((s.data_y[k + 1].log10() - log_min)
+                                            / (log_max - log_min))
+                                            * plot_height
                                 } else {
-                                    plot_y + plot_height - ((s.data_y[k + 1] - y_min_val) / (y_max_val - y_min_val)) * plot_height
+                                    plot_y + plot_height
+                                        - ((s.data_y[k + 1] - y_min_val) / (y_max_val - y_min_val))
+                                            * plot_height
                                 };
                                 draw_line(&mut pinned_painter, x1, y1, x2, y2);
                             }
@@ -1244,24 +1428,41 @@ impl graph_object_qobject::GraphObject {
                     if s.marker {
                         let marker_size = 6.0;
                         for k in 0..s.data_x.len() {
-                            if this.x_log_scale && s.data_x[k] <= 0.0 { continue; }
-                            if this.y_log_scale && s.data_y[k] <= 0.0 { continue; }
+                            if this.x_log_scale && s.data_x[k] <= 0.0 {
+                                continue;
+                            }
+                            if this.y_log_scale && s.data_y[k] <= 0.0 {
+                                continue;
+                            }
                             let x_pt = if this.x_log_scale {
                                 let log_min = x_min_val.log10();
                                 let log_max = x_max_val.log10();
-                                plot_x + ((s.data_x[k].log10() - log_min) / (log_max - log_min)) * plot_width
+                                plot_x
+                                    + ((s.data_x[k].log10() - log_min) / (log_max - log_min))
+                                        * plot_width
                             } else {
-                                plot_x + ((s.data_x[k] - x_min_val) / (x_max_val - x_min_val)) * plot_width
+                                plot_x
+                                    + ((s.data_x[k] - x_min_val) / (x_max_val - x_min_val))
+                                        * plot_width
                             };
                             let y_pt = if this.y_log_scale {
                                 let log_min = y_min_val.log10();
                                 let log_max = y_max_val.log10();
-                                plot_y + plot_height - ((s.data_y[k].log10() - log_min) / (log_max - log_min)) * plot_height
+                                plot_y + plot_height
+                                    - ((s.data_y[k].log10() - log_min) / (log_max - log_min))
+                                        * plot_height
                             } else {
-                                plot_y + plot_height - ((s.data_y[k] - y_min_val) / (y_max_val - y_min_val)) * plot_height
+                                plot_y + plot_height
+                                    - ((s.data_y[k] - y_min_val) / (y_max_val - y_min_val))
+                                        * plot_height
                             };
-                            let rect = QRectF::new(x_pt - marker_size / 2.0, y_pt - marker_size / 2.0, marker_size, marker_size);
-                            pinned_painter.as_mut().draw_ellipse(&rect);
+                            let rect = QRectF::new(
+                                x_pt - marker_size / 2.0,
+                                y_pt - marker_size / 2.0,
+                                marker_size,
+                                marker_size,
+                            );
+                            pinned_painter.as_mut().fill_rect(&rect, &s.color);
                         }
                     }
                 } else {
@@ -1278,13 +1479,25 @@ impl graph_object_qobject::GraphObject {
                     // Compute series local min/max
                     let min_val = s.data_y.iter().fold(f64::INFINITY, |a, &b| a.min(b));
                     let max_val = s.data_y.iter().fold(f64::NEG_INFINITY, |a, &b| a.max(b));
-                    let local_min = if min_val == max_val { min_val - 0.5 } else { min_val };
-                    let local_max = if min_val == max_val { max_val + 0.5 } else { max_val };
+                    let local_min = if min_val == max_val {
+                        min_val - 0.5
+                    } else {
+                        min_val
+                    };
+                    let local_max = if min_val == max_val {
+                        max_val + 0.5
+                    } else {
+                        max_val
+                    };
                     let (local_min_val, local_max_val) = if this.y_log_scale {
                         if local_max <= 0.0 {
                             (0.1, 1.0)
                         } else {
-                            let loc_min = if local_min > 0.0 { local_min } else { (local_max / 1e6).max(1e-9) };
+                            let loc_min = if local_min > 0.0 {
+                                local_min
+                            } else {
+                                (local_max / 1e6).max(1e-9)
+                            };
                             (loc_min, local_max)
                         }
                     } else {
@@ -1293,42 +1506,62 @@ impl graph_object_qobject::GraphObject {
                     // Scale factors
                     let x_scale = plot_width / (this.x_max - this.x_min);
                     let y_scale_local = if this.y_log_scale {
-                        (band_height / ((local_max_val).log10() - (local_min_val).log10()).max(1e-9))
+                        (band_height
+                            / ((local_max_val).log10() - (local_min_val).log10()).max(1e-9))
                     } else {
                         band_height / (local_max_val - local_min_val)
                     };
                     if s.data_x.len() > 1 {
                         if s.is_digital {
                             for k in 0..(s.data_x.len() - 1) {
-                                if this.x_log_scale && (s.data_x[k] <= 0.0 || s.data_x[k + 1] <= 0.0) {
+                                if this.x_log_scale
+                                    && (s.data_x[k] <= 0.0 || s.data_x[k + 1] <= 0.0)
+                                {
                                     continue;
                                 }
-                                if this.y_log_scale && (s.data_y[k] <= 0.0 || s.data_y[k + 1] <= 0.0) {
+                                if this.y_log_scale
+                                    && (s.data_y[k] <= 0.0 || s.data_y[k + 1] <= 0.0)
+                                {
                                     continue;
                                 }
                                 let x_curr = if this.x_log_scale {
                                     let log_min = x_min_val.log10();
                                     let log_max = x_max_val.log10();
-                                    plot_x + ((s.data_x[k].log10() - log_min) / (log_max - log_min)) * plot_width
+                                    plot_x
+                                        + ((s.data_x[k].log10() - log_min) / (log_max - log_min))
+                                            * plot_width
                                 } else {
-                                    plot_x + ((s.data_x[k] - this.x_min) / (this.x_max - this.x_min)) * plot_width
+                                    plot_x
+                                        + ((s.data_x[k] - this.x_min) / (this.x_max - this.x_min))
+                                            * plot_width
                                 };
                                 let x_next = if this.x_log_scale {
                                     let log_min = x_min_val.log10();
                                     let log_max = x_max_val.log10();
-                                    plot_x + ((s.data_x[k + 1].log10() - log_min) / (log_max - log_min)) * plot_width
+                                    plot_x
+                                        + ((s.data_x[k + 1].log10() - log_min)
+                                            / (log_max - log_min))
+                                            * plot_width
                                 } else {
-                                    plot_x + ((s.data_x[k + 1] - this.x_min) / (this.x_max - this.x_min)) * plot_width
+                                    plot_x
+                                        + ((s.data_x[k + 1] - this.x_min)
+                                            / (this.x_max - this.x_min))
+                                            * plot_width
                                 };
                                 let y_curr = if this.y_log_scale {
-                                    band_bottom_y - ((s.data_y[k].log10() - local_min_val.log10()) * y_scale_local)
+                                    band_bottom_y
+                                        - ((s.data_y[k].log10() - local_min_val.log10())
+                                            * y_scale_local)
                                 } else {
                                     band_bottom_y - ((s.data_y[k] - local_min_val) * y_scale_local)
                                 };
                                 let y_next = if this.y_log_scale {
-                                    band_bottom_y - ((s.data_y[k + 1].log10() - local_min_val.log10()) * y_scale_local)
+                                    band_bottom_y
+                                        - ((s.data_y[k + 1].log10() - local_min_val.log10())
+                                            * y_scale_local)
                                 } else {
-                                    band_bottom_y - ((s.data_y[k + 1] - local_min_val) * y_scale_local)
+                                    band_bottom_y
+                                        - ((s.data_y[k + 1] - local_min_val) * y_scale_local)
                                 };
                                 draw_line(&mut pinned_painter, x_curr, y_curr, x_next, y_curr);
                                 if (s.data_y[k] - s.data_y[k + 1]).abs() > f64::EPSILON {
@@ -1337,35 +1570,54 @@ impl graph_object_qobject::GraphObject {
                             }
                         } else {
                             for k in 0..(s.data_x.len() - 1) {
-                                if this.x_log_scale && (s.data_x[k] <= 0.0 || s.data_x[k + 1] <= 0.0) {
+                                if this.x_log_scale
+                                    && (s.data_x[k] <= 0.0 || s.data_x[k + 1] <= 0.0)
+                                {
                                     continue;
                                 }
-                                if this.y_log_scale && (s.data_y[k] <= 0.0 || s.data_y[k + 1] <= 0.0) {
+                                if this.y_log_scale
+                                    && (s.data_y[k] <= 0.0 || s.data_y[k + 1] <= 0.0)
+                                {
                                     continue;
                                 }
                                 let x1 = if this.x_log_scale {
                                     let log_min = x_min_val.log10();
                                     let log_max = x_max_val.log10();
-                                    plot_x + ((s.data_x[k].log10() - log_min) / (log_max - log_min)) * plot_width
+                                    plot_x
+                                        + ((s.data_x[k].log10() - log_min) / (log_max - log_min))
+                                            * plot_width
                                 } else {
-                                    plot_x + ((s.data_x[k] - this.x_min) / (this.x_max - this.x_min)) * plot_width
+                                    plot_x
+                                        + ((s.data_x[k] - this.x_min) / (this.x_max - this.x_min))
+                                            * plot_width
                                 };
                                 let x2 = if this.x_log_scale {
                                     let log_min = x_min_val.log10();
                                     let log_max = x_max_val.log10();
-                                    plot_x + ((s.data_x[k + 1].log10() - log_min) / (log_max - log_min)) * plot_width
+                                    plot_x
+                                        + ((s.data_x[k + 1].log10() - log_min)
+                                            / (log_max - log_min))
+                                            * plot_width
                                 } else {
-                                    plot_x + ((s.data_x[k + 1] - this.x_min) / (this.x_max - this.x_min)) * plot_width
+                                    plot_x
+                                        + ((s.data_x[k + 1] - this.x_min)
+                                            / (this.x_max - this.x_min))
+                                            * plot_width
                                 };
                                 let y1 = if this.y_log_scale {
-                                    band_bottom_y - ((s.data_y[k].log10() - local_min_val.log10()) * y_scale_local)
+                                    band_bottom_y
+                                        - ((s.data_y[k].log10() - local_min_val.log10())
+                                            * y_scale_local)
                                 } else {
                                     band_bottom_y - ((s.data_y[k] - local_min_val) * y_scale_local)
                                 };
                                 let y2 = if this.y_log_scale {
-                                    band_bottom_y - ((s.data_y[k + 1].log10() - local_min_val.log10()) * y_scale_local)
+                                    band_bottom_y
+                                        - ((s.data_y[k + 1].log10() - local_min_val.log10())
+                                            * y_scale_local)
                                 } else {
-                                    band_bottom_y - ((s.data_y[k + 1] - local_min_val) * y_scale_local)
+                                    band_bottom_y
+                                        - ((s.data_y[k + 1] - local_min_val) * y_scale_local)
                                 };
                                 draw_line(&mut pinned_painter, x1, y1, x2, y2);
                             }
@@ -1374,22 +1626,37 @@ impl graph_object_qobject::GraphObject {
                     if s.marker {
                         let marker_size = 6.0;
                         for k in 0..s.data_x.len() {
-                            if this.x_log_scale && s.data_x[k] <= 0.0 { continue; }
-                            if this.y_log_scale && s.data_y[k] <= 0.0 { continue; }
+                            if this.x_log_scale && s.data_x[k] <= 0.0 {
+                                continue;
+                            }
+                            if this.y_log_scale && s.data_y[k] <= 0.0 {
+                                continue;
+                            }
                             let x_pt = if this.x_log_scale {
                                 let log_min = x_min_val.log10();
                                 let log_max = x_max_val.log10();
-                                plot_x + ((s.data_x[k].log10() - log_min) / (log_max - log_min)) * plot_width
+                                plot_x
+                                    + ((s.data_x[k].log10() - log_min) / (log_max - log_min))
+                                        * plot_width
                             } else {
-                                plot_x + ((s.data_x[k] - this.x_min) / (this.x_max - this.x_min)) * plot_width
+                                plot_x
+                                    + ((s.data_x[k] - this.x_min) / (this.x_max - this.x_min))
+                                        * plot_width
                             };
                             let y_pt = if this.y_log_scale {
-                                band_bottom_y - ((s.data_y[k].log10() - local_min_val.log10()) * y_scale_local)
+                                band_bottom_y
+                                    - ((s.data_y[k].log10() - local_min_val.log10())
+                                        * y_scale_local)
                             } else {
                                 band_bottom_y - ((s.data_y[k] - local_min_val) * y_scale_local)
                             };
-                            let rect = QRectF::new(x_pt - marker_size / 2.0, y_pt - marker_size / 2.0, marker_size, marker_size);
-                            pinned_painter.as_mut().draw_ellipse(&rect);
+                            let rect = QRectF::new(
+                                x_pt - marker_size / 2.0,
+                                y_pt - marker_size / 2.0,
+                                marker_size,
+                                marker_size,
+                            );
+                            pinned_painter.as_mut().fill_rect(&rect, &s.color);
                         }
                     }
                 }
@@ -1408,12 +1675,16 @@ impl graph_object_qobject::GraphObject {
                     }
                 }
                 let legend_width = max_text_width + 20.0;
-                let legend_height = this.series_list.len() as f64 * entry_height + legend_padding * 2.0;
+                let legend_height =
+                    this.series_list.len() as f64 * entry_height + legend_padding * 2.0;
                 let (legend_x, legend_y) = match this.legend_position {
                     0 => (plot_x + 5.0, plot_y + 5.0), // top-left
                     1 => (plot_x + plot_width - legend_width - 5.0, plot_y + 5.0), // top-right
                     2 => (plot_x + 5.0, plot_y + plot_height - legend_height - 5.0), // bottom-left
-                    3 => (plot_x + plot_width - legend_width - 5.0, plot_y + plot_height - legend_height - 5.0), // bottom-right
+                    3 => (
+                        plot_x + plot_width - legend_width - 5.0,
+                        plot_y + plot_height - legend_height - 5.0,
+                    ), // bottom-right
                     _ => (plot_x + plot_width - legend_width - 5.0, plot_y + 5.0),
                 };
                 // Background for legend (semi-transparent)
@@ -1433,16 +1704,28 @@ impl graph_object_qobject::GraphObject {
                     legend_pen.set_color(&s.color);
                     legend_pen.set_width(2);
                     legend_pen.set_style(PenStyle::SolidLine);
-                    pinned_painter.as_mut().set_pen_with_pen(&legend_pen);
-                    let line_y = legend_y + legend_padding + idx as f64 * entry_height + entry_height / 2.0;
-                    draw_line(&mut pinned_painter, legend_x + 5.0, line_y, legend_x + 15.0, line_y);
+                    pinned_painter.as_mut().set_pen(&legend_pen);
+                    let line_y =
+                        legend_y + legend_padding + idx as f64 * entry_height + entry_height / 2.0;
+                    draw_line(
+                        &mut pinned_painter,
+                        legend_x + 5.0,
+                        line_y,
+                        legend_x + 15.0,
+                        line_y,
+                    );
                     // Text
                     let mut legend_text_pen = QPen::default();
                     legend_text_pen.set_color(&axis_color);
                     legend_text_pen.set_width(0);
                     legend_text_pen.set_style(PenStyle::SolidLine);
-                    pinned_painter.as_mut().set_pen_with_pen(&legend_text_pen);
-                    draw_text(&mut pinned_painter, legend_x + 20.0, legend_y + legend_padding + idx as f64 * entry_height + 10.0, &text);
+                    pinned_painter.as_mut().set_pen(&legend_text_pen);
+                    draw_text(
+                        &mut pinned_painter,
+                        legend_x + 20.0,
+                        legend_y + legend_padding + idx as f64 * entry_height + 10.0,
+                        &text,
+                    );
                 }
             }
             // Draw cursor lines and differences
@@ -1450,10 +1733,11 @@ impl graph_object_qobject::GraphObject {
             cursor_pen.set_color(&axis_color);
             cursor_pen.set_width(1);
             cursor_pen.set_style(PenStyle::DashLine);
-            pinned_painter.as_mut().set_pen_with_pen(&cursor_pen);
+            pinned_painter.as_mut().set_pen(&cursor_pen);
             // Vertical cursors
             for x_val in &this.cursor_x_positions {
-                if *x_val >= x_min_val && *x_val <= x_max_val && (!this.x_log_scale || *x_val > 0.0) {
+                if *x_val >= x_min_val && *x_val <= x_max_val && (!this.x_log_scale || *x_val > 0.0)
+                {
                     let x_pix = if this.x_log_scale {
                         let log_min = x_min_val.log10();
                         let log_max = x_max_val.log10();
@@ -1461,21 +1745,37 @@ impl graph_object_qobject::GraphObject {
                     } else {
                         plot_x + ((*x_val - x_min_val) / (x_max_val - x_min_val)) * plot_width
                     };
-                    draw_line(&mut pinned_painter, x_pix, plot_y, x_pix, plot_y + plot_height);
+                    draw_line(
+                        &mut pinned_painter,
+                        x_pix,
+                        plot_y,
+                        x_pix,
+                        plot_y + plot_height,
+                    );
                 }
             }
             // Horizontal cursors (if not separate series)
             if !this.separate_series {
                 for y_val in &this.cursor_y_positions {
-                    if *y_val >= y_min_val && *y_val <= y_max_val && (!this.y_log_scale || *y_val > 0.0) {
-                        let y_pix = plot_y + plot_height - (if this.y_log_scale {
-                            let log_min = y_min_val.log10();
-                            let log_max = y_max_val.log10();
-                            ((*y_val).log10() - log_min) / (log_max - log_min) * plot_height
-                        } else {
-                            ((*y_val - y_min_val) / (y_max_val - y_min_val)) * plot_height
-                        });
-                        draw_line(&mut pinned_painter, plot_x, y_pix, plot_x + plot_width, y_pix);
+                    if *y_val >= y_min_val
+                        && *y_val <= y_max_val
+                        && (!this.y_log_scale || *y_val > 0.0)
+                    {
+                        let y_pix = plot_y + plot_height
+                            - (if this.y_log_scale {
+                                let log_min = y_min_val.log10();
+                                let log_max = y_max_val.log10();
+                                ((*y_val).log10() - log_min) / (log_max - log_min) * plot_height
+                            } else {
+                                ((*y_val - y_min_val) / (y_max_val - y_min_val)) * plot_height
+                            });
+                        draw_line(
+                            &mut pinned_painter,
+                            plot_x,
+                            y_pix,
+                            plot_x + plot_width,
+                            y_pix,
+                        );
                     }
                 }
             }
@@ -1484,13 +1784,16 @@ impl graph_object_qobject::GraphObject {
             diff_pen.set_color(&axis_color);
             diff_pen.set_width(0);
             diff_pen.set_style(PenStyle::SolidLine);
-            pinned_painter.as_mut().set_pen_with_pen(&diff_pen);
+            pinned_painter.as_mut().set_pen(&diff_pen);
             if this.cursor_x_positions.len() == 2 {
                 let x1 = this.cursor_x_positions[0];
                 let x2 = this.cursor_x_positions[1];
                 if !(this.x_log_scale && (x1 <= 0.0 || x2 <= 0.0)) {
                     let dx = (x2 - x1).abs();
-                    let label = QString::from(&format!("ΔX: {}", self.as_ref().format_value(dx).to_string()));
+                    let label = QString::from(&format!(
+                        "ΔX: {}",
+                        self.as_ref().format_value(dx).to_string()
+                    ));
                     let text_width = label.to_string().len() as f64 * 7.0;
                     let text_x = plot_x + plot_width / 2.0 - text_width / 2.0;
                     let text_y = plot_y + 15.0;
@@ -1502,23 +1805,28 @@ impl graph_object_qobject::GraphObject {
                 let y2 = this.cursor_y_positions[1];
                 if !(this.y_log_scale && (y1 <= 0.0 || y2 <= 0.0)) {
                     let dy = (y2 - y1).abs();
-                    let label = QString::from(&format!("ΔY: {}", self.as_ref().format_value(dy).to_string()));
+                    let label = QString::from(&format!(
+                        "ΔY: {}",
+                        self.as_ref().format_value(dy).to_string()
+                    ));
                     let text_x = plot_x + 10.0;
                     let mid_y = {
-                        let y1_pix = plot_y + plot_height - (if this.y_log_scale {
-                            let log_min = y_min_val.log10();
-                            let log_max = y_max_val.log10();
-                            ((y1).log10() - log_min) / (log_max - log_min) * plot_height
-                        } else {
-                            ((y1 - y_min_val) / (y_max_val - y_min_val)) * plot_height
-                        });
-                        let y2_pix = plot_y + plot_height - (if this.y_log_scale {
-                            let log_min = y_min_val.log10();
-                            let log_max = y_max_val.log10();
-                            ((y2).log10() - log_min) / (log_max - log_min) * plot_height
-                        } else {
-                            ((y2 - y_min_val) / (y_max_val - y_min_val)) * plot_height
-                        });
+                        let y1_pix = plot_y + plot_height
+                            - (if this.y_log_scale {
+                                let log_min = y_min_val.log10();
+                                let log_max = y_max_val.log10();
+                                ((y1).log10() - log_min) / (log_max - log_min) * plot_height
+                            } else {
+                                ((y1 - y_min_val) / (y_max_val - y_min_val)) * plot_height
+                            });
+                        let y2_pix = plot_y + plot_height
+                            - (if this.y_log_scale {
+                                let log_min = y_min_val.log10();
+                                let log_max = y_max_val.log10();
+                                ((y2).log10() - log_min) / (log_max - log_min) * plot_height
+                            } else {
+                                ((y2 - y_min_val) / (y_max_val - y_min_val)) * plot_height
+                            });
                         (y1_pix + y2_pix) / 2.0
                     };
                     let text_y = mid_y + 4.0;

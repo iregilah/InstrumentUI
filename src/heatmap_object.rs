@@ -1,6 +1,6 @@
 // src/heatmap_object.rs
 use cxx_qt::{CxxQtType, Threading};
-use cxx_qt_lib::{QColor, QPointF, QRectF, QSizeF, QString};
+use cxx_qt_lib::{QColor, QPainterRenderHint, QPoint, QRectF, QSizeF, QString};
 use std::pin::Pin;
 
 #[cxx_qt::bridge]
@@ -13,8 +13,10 @@ pub mod heatmap_qobject {
         include!("cxx-qt-lib/qsizef.h");
         type QSizeF = cxx_qt_lib::QSizeF;
         include!("cxx-qt-lib/qrectf.h");
-        include!("cxx-qt-lib/qpointf.h");
-        type QPointF = cxx_qt_lib::QPointF;
+        include!("cxx-qt-lib/qpoint.h");
+        type QPoint = cxx_qt_lib::QPoint;
+        include!("cxx-qt-lib/qpainter.h");
+        type QPainter = cxx_qt_lib::QPainter;
         type QRectF = cxx_qt_lib::QRectF;
 
         include!(<QtQuick/QQuickItem>);
@@ -22,22 +24,7 @@ pub mod heatmap_qobject {
         include!(<QtQuick/QQuickPaintedItem>);
         type QQuickPaintedItem;
     }
-    unsafe extern "C++" {
-        include!(<QtGui/QPainter>);
-        type QPainter;
-        #[rust_name = "fill_rect"]
-        fn fillRect(self: Pin<&mut QPainter>, rect: &QRectF, color: &QColor);
-        #[rust_name = "draw_text"]
-        fn drawText(self: Pin<&mut QPainter>, p: &QPointF, text: &QString);
-        #[rust_name = "save"]
-        fn save(self: Pin<&mut QPainter>);
-        #[rust_name = "restore"]
-        fn restore(self: Pin<&mut QPainter>);
-        #[rust_name = "translate"]
-        fn translate(self: Pin<&mut QPainter>, dx: f64, dy: f64);
-        #[rust_name = "rotate"]
-        fn rotate(self: Pin<&mut QPainter>, angle: f64);
-    }
+
     extern "RustQt" {
         #[qobject]
         #[qml_element]
@@ -241,10 +228,16 @@ impl heatmap_qobject::HeatmapObject {
             let this = binding.rust();
             let mut draw_text =
                 |p: &mut Pin<&mut heatmap_qobject::QPainter>, x: f64, y: f64, text: &QString| {
-                    let pt = QPointF::new(x, y);
+                    // cxx-qt-lib QPainter::draw_text QPoint-ot vár (int), ezért kerekítünk.
+                    let pt = QPoint::new(x.round() as i32, y.round() as i32);
                     p.as_mut().draw_text(&pt, text);
                 };
-           // pinned_painter.as_mut().set_render_hint(1, true);
+            pinned_painter
+                .as_mut()
+                .set_render_hint(QPainterRenderHint::Antialiasing, true);
+            pinned_painter
+                .as_mut()
+                .set_render_hint(QPainterRenderHint::TextAntialiasing, true);
             let size = self.size();
             let width = size.width();
             let height = size.height();
@@ -374,7 +367,8 @@ impl heatmap_qobject::HeatmapObject {
             if !this.y_label.to_string().is_empty() {
                 pinned_painter.as_mut().save();
                 let center_y = plot_y + plot_height / 2.0;
-                pinned_painter.as_mut().translate(plot_x - 40.0, center_y);
+                let offset = QPoint::new((plot_x - 40.0).round() as i32, center_y.round() as i32);
+                pinned_painter.as_mut().translate(&offset);
                 pinned_painter.as_mut().rotate(-90.0);
                 draw_text(&mut pinned_painter, 0.0, 0.0, &this.y_label);
                 pinned_painter.as_mut().restore();
