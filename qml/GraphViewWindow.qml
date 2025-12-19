@@ -11,6 +11,7 @@ ApplicationWindow {
     width: 1000
     height: 600
     title: qsTr("Graph View Test")
+    property bool extraSeriesAdded: false
 
     ColumnLayout {
         anchors.fill: parent
@@ -107,17 +108,25 @@ ApplicationWindow {
                 graph.addSeries(QString("Digital1"), 2, Qt.rgba(0, 1, 0, 1), 2.0, 1, false)
                 var t = 0.0
                 Timer {
-                    interval: 50
-                    running: true
-                    repeat: true
-                    onTriggered: {
-                        var analogVal = Math.sin(2 * Math.PI * 1 * t)
-                        var digitalVal = (Math.floor(t) % 2 === 0) ? 1 : 0
-                        graph.addDataPoint(QString("Analog1"), t, analogVal)
-                        graph.addDataPoint(QString("Digital1"), t, digitalVal)
-                        t += 0.05
+                interval: 50
+                running: true
+                repeat: true
+                onTriggered: {
+                    var analogVal = Math.sin(2 * Math.PI * 1 * t)
+                    var digitalVal = (Math.floor(t) % 2 === 0) ? 1 : 0
+                    graph.addDataPoint(QString("Analog1"), t, analogVal)
+                    graph.addDataPoint(QString("Digital1"), t, digitalVal)
+                    if (!window.extraSeriesAdded && t >= 2.0) {
+                        window.extraSeriesAdded = true
+                        graph.addSeries(QString("Analog2"), 0, Qt.rgba(0, 0, 1, 1), 2.0, 1, false)
                     }
+                    if (window.extraSeriesAdded) {
+                        var analogVal2 = Math.cos(2 * Math.PI * 1 * t)
+                        graph.addDataPoint(QString("Analog2"), t, analogVal2)
+                    }
+                    t += 0.05
                 }
+            }
             }
 
             MouseArea {

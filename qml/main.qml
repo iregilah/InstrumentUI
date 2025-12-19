@@ -17,6 +17,8 @@ ApplicationWindow {
     color: "#1e1e1e"
     Material.theme: oscillo.darkMode ? Material.Dark : Material.Light
 
+    property var graphWindow: null
+
     OscilloObject {
         id: oscillo
         objectName: "oscilloObject"
@@ -87,7 +89,7 @@ ApplicationWindow {
 
                 // Aspect of the incoming image (fallback to 5:3 which is common for scopes)
                 property real imgAspect: (scopeImage.implicitWidth > 0 && scopeImage.implicitHeight > 0)
-                    ? (scopeImage.implicitWidth / scopeImage.implicitHeight) : 5/3
+                    ? (scopeImage.implicitWidth / scopeImage.implicitHeight) : 5 / 3
 
                 Image {
                     id: scopeImage
@@ -102,8 +104,8 @@ ApplicationWindow {
                 Rectangle {
                     width: 2
                     height: scopeImage.paintedHeight
-                    x: (parent.width - scopeImage.paintedWidth)/2 + scopeImage.paintedWidth/2 - 1
-                    y: (parent.height - scopeImage.paintedHeight)/2
+                    x: (parent.width - scopeImage.paintedWidth) / 2 + scopeImage.paintedWidth / 2 - 1
+                    y: (parent.height - scopeImage.paintedHeight) / 2
                     color: "#ccc"
                 }
 
@@ -116,6 +118,20 @@ ApplicationWindow {
                     anchors.topMargin: 4
                     anchors.right: parent.right
                     anchors.rightMargin: 4
+                    onClicked: {
+                        if (graphWindow === null) {
+                            var comp = Qt.createComponent("qrc:/qt/qml/InstrumentUI/qml/GraphViewWindow.qml")
+                            if (comp.status === Component.Ready) {
+                                graphWindow = comp.createObject(null)
+                            } else {
+                                console.log("Error loading GraphViewWindow:", comp.errorString())
+                            }
+                        } else {
+                            graphWindow.visible = true
+                            graphWindow.raise()
+                            graphWindow.requestActivate()
+                        }
+                    }
                 }
                 Button {
                     text: "↔"
@@ -152,7 +168,9 @@ ApplicationWindow {
                             spacing: 4
                             RowLayout {
                                 spacing: 4
-                                Label { text: qsTr("F") }
+                                Label {
+                                    text: qsTr("F")
+                                }
                                 Slider {
                                     Layout.fillWidth: true
                                     from: 1
@@ -160,11 +178,15 @@ ApplicationWindow {
                                     value: 50
                                     onValueChanged: oscillo.timebase_changed(value)
                                 }
-                                Label { text: qsTr("Δ") }
+                                Label {
+                                    text: qsTr("Δ")
+                                }
                             }
                             RowLayout {
                                 spacing: 4
-                                Label { text: qsTr("B") }
+                                Label {
+                                    text: qsTr("B")
+                                }
                                 Slider {
                                     Layout.fillWidth: true
                                     from: -100
@@ -172,7 +194,9 @@ ApplicationWindow {
                                     value: 0
                                     onValueChanged: oscillo.time_offset_changed(value)
                                 }
-                                Label { text: qsTr("D") }
+                                Label {
+                                    text: qsTr("D")
+                                }
                             }
                         }
                     }
@@ -268,10 +292,18 @@ ApplicationWindow {
                     TabBar {
                         id: channelTabBar
                         Layout.fillWidth: true
-                        TabButton { text: qsTr("CH1") }
-                        TabButton { text: qsTr("CH2") }
-                        TabButton { text: qsTr("CH3") }
-                        TabButton { text: qsTr("CH4") }
+                        TabButton {
+                            text: qsTr("CH1")
+                        }
+                        TabButton {
+                            text: qsTr("CH2")
+                        }
+                        TabButton {
+                            text: qsTr("CH3")
+                        }
+                        TabButton {
+                            text: qsTr("CH4")
+                        }
                     }
 
                     StackLayout {
@@ -293,7 +325,9 @@ ApplicationWindow {
                                 }
                                 RowLayout {
                                     spacing: 4
-                                    Label { text: qsTr("F") }
+                                    Label {
+                                        text: qsTr("F")
+                                    }
                                     Slider {
                                         Layout.fillWidth: true
                                         from: 1
@@ -301,11 +335,15 @@ ApplicationWindow {
                                         value: 50
                                         onValueChanged: oscillo.ch1_scale_changed(value)
                                     }
-                                    Label { text: qsTr("A") }
+                                    Label {
+                                        text: qsTr("A")
+                                    }
                                 }
                                 RowLayout {
                                     spacing: 4
-                                    Label { text: qsTr("B") }
+                                    Label {
+                                        text: qsTr("B")
+                                    }
                                     Slider {
                                         Layout.fillWidth: true
                                         from: -100
@@ -313,7 +351,9 @@ ApplicationWindow {
                                         value: 0
                                         onValueChanged: oscillo.ch1_offset_changed(value)
                                     }
-                                    Label { text: qsTr("D") }
+                                    Label {
+                                        text: qsTr("D")
+                                    }
                                 }
                                 GridLayout {
                                     columns: 2
@@ -321,21 +361,27 @@ ApplicationWindow {
                                     rowSpacing: 4
                                     Layout.fillWidth: true
 
-                                    Label { text: qsTr("Coupling:"); Layout.column: 0; Layout.row: 0 }
+                                    Label {
+                                        text: qsTr("Coupling:"); Layout.column: 0; Layout.row: 0
+                                    }
                                     ComboBox {
                                         Layout.column: 1; Layout.row: 0
                                         Layout.fillWidth: true
                                         model: ["DC", "AC", "GND"]
                                         onActivated: oscillo.ch1_coupling_selected(model[index])
                                     }
-                                    Label { text: qsTr("Probe:"); Layout.column: 0; Layout.row: 1 }
+                                    Label {
+                                        text: qsTr("Probe:"); Layout.column: 0; Layout.row: 1
+                                    }
                                     ComboBox {
                                         Layout.column: 1; Layout.row: 1
                                         Layout.fillWidth: true
                                         model: ["1×", "10×"]
                                         onActivated: oscillo.ch1_probe_selected(model[index])
                                     }
-                                    Label { text: qsTr("Current:"); Layout.column: 0; Layout.row: 2 }
+                                    Label {
+                                        text: qsTr("Current:"); Layout.column: 0; Layout.row: 2
+                                    }
                                     TextField {
                                         Layout.column: 1; Layout.row: 2
                                         Layout.fillWidth: true
@@ -365,7 +411,9 @@ ApplicationWindow {
                                 }
                                 RowLayout {
                                     spacing: 4
-                                    Label { text: qsTr("F") }
+                                    Label {
+                                        text: qsTr("F")
+                                    }
                                     Slider {
                                         Layout.fillWidth: true
                                         from: 1
@@ -373,11 +421,15 @@ ApplicationWindow {
                                         value: 50
                                         onValueChanged: oscillo.ch2_scale_changed(value)
                                     }
-                                    Label { text: qsTr("A") }
+                                    Label {
+                                        text: qsTr("A")
+                                    }
                                 }
                                 RowLayout {
                                     spacing: 4
-                                    Label { text: qsTr("B") }
+                                    Label {
+                                        text: qsTr("B")
+                                    }
                                     Slider {
                                         Layout.fillWidth: true
                                         from: -100
@@ -385,7 +437,9 @@ ApplicationWindow {
                                         value: 0
                                         onValueChanged: oscillo.ch2_offset_changed(value)
                                     }
-                                    Label { text: qsTr("D") }
+                                    Label {
+                                        text: qsTr("D")
+                                    }
                                 }
                                 GridLayout {
                                     columns: 2
@@ -393,21 +447,27 @@ ApplicationWindow {
                                     rowSpacing: 4
                                     Layout.fillWidth: true
 
-                                    Label { text: qsTr("Coupling:"); Layout.column: 0; Layout.row: 0 }
+                                    Label {
+                                        text: qsTr("Coupling:"); Layout.column: 0; Layout.row: 0
+                                    }
                                     ComboBox {
                                         Layout.column: 1; Layout.row: 0
                                         Layout.fillWidth: true
                                         model: ["DC", "AC", "GND"]
                                         onActivated: oscillo.ch2_coupling_selected(model[index])
                                     }
-                                    Label { text: qsTr("Probe:"); Layout.column: 0; Layout.row: 1 }
+                                    Label {
+                                        text: qsTr("Probe:"); Layout.column: 0; Layout.row: 1
+                                    }
                                     ComboBox {
                                         Layout.column: 1; Layout.row: 1
                                         Layout.fillWidth: true
                                         model: ["1×", "10×"]
                                         onActivated: oscillo.ch2_probe_selected(model[index])
                                     }
-                                    Label { text: qsTr("Current:"); Layout.column: 0; Layout.row: 2 }
+                                    Label {
+                                        text: qsTr("Current:"); Layout.column: 0; Layout.row: 2
+                                    }
                                     TextField {
                                         Layout.column: 1; Layout.row: 2
                                         Layout.fillWidth: true
@@ -437,7 +497,9 @@ ApplicationWindow {
                                 }
                                 RowLayout {
                                     spacing: 4
-                                    Label { text: qsTr("F") }
+                                    Label {
+                                        text: qsTr("F")
+                                    }
                                     Slider {
                                         Layout.fillWidth: true
                                         from: 1
@@ -445,11 +507,15 @@ ApplicationWindow {
                                         value: 50
                                         onValueChanged: oscillo.ch3_scale_changed(value)
                                     }
-                                    Label { text: qsTr("A") }
+                                    Label {
+                                        text: qsTr("A")
+                                    }
                                 }
                                 RowLayout {
                                     spacing: 4
-                                    Label { text: qsTr("B") }
+                                    Label {
+                                        text: qsTr("B")
+                                    }
                                     Slider {
                                         Layout.fillWidth: true
                                         from: -100
@@ -457,7 +523,9 @@ ApplicationWindow {
                                         value: 0
                                         onValueChanged: oscillo.ch3_offset_changed(value)
                                     }
-                                    Label { text: qsTr("D") }
+                                    Label {
+                                        text: qsTr("D")
+                                    }
                                 }
                                 GridLayout {
                                     columns: 2
@@ -465,21 +533,27 @@ ApplicationWindow {
                                     rowSpacing: 4
                                     Layout.fillWidth: true
 
-                                    Label { text: qsTr("Coupling:"); Layout.column: 0; Layout.row: 0 }
+                                    Label {
+                                        text: qsTr("Coupling:"); Layout.column: 0; Layout.row: 0
+                                    }
                                     ComboBox {
                                         Layout.column: 1; Layout.row: 0
                                         Layout.fillWidth: true
                                         model: ["DC", "AC", "GND"]
                                         onActivated: oscillo.ch3_coupling_selected(model[index])
                                     }
-                                    Label { text: qsTr("Probe:"); Layout.column: 0; Layout.row: 1 }
+                                    Label {
+                                        text: qsTr("Probe:"); Layout.column: 0; Layout.row: 1
+                                    }
                                     ComboBox {
                                         Layout.column: 1; Layout.row: 1
                                         Layout.fillWidth: true
                                         model: ["1×", "10×"]
                                         onActivated: oscillo.ch3_probe_selected(model[index])
                                     }
-                                    Label { text: qsTr("Current:"); Layout.column: 0; Layout.row: 2 }
+                                    Label {
+                                        text: qsTr("Current:"); Layout.column: 0; Layout.row: 2
+                                    }
                                     TextField {
                                         Layout.column: 1; Layout.row: 2
                                         Layout.fillWidth: true
@@ -509,7 +583,9 @@ ApplicationWindow {
                                 }
                                 RowLayout {
                                     spacing: 4
-                                    Label { text: qsTr("F") }
+                                    Label {
+                                        text: qsTr("F")
+                                    }
                                     Slider {
                                         Layout.fillWidth: true
                                         from: 1
@@ -517,11 +593,15 @@ ApplicationWindow {
                                         value: 50
                                         onValueChanged: oscillo.ch4_scale_changed(value)
                                     }
-                                    Label { text: qsTr("A") }
+                                    Label {
+                                        text: qsTr("A")
+                                    }
                                 }
                                 RowLayout {
                                     spacing: 4
-                                    Label { text: qsTr("B") }
+                                    Label {
+                                        text: qsTr("B")
+                                    }
                                     Slider {
                                         Layout.fillWidth: true
                                         from: -100
@@ -529,7 +609,9 @@ ApplicationWindow {
                                         value: 0
                                         onValueChanged: oscillo.ch4_offset_changed(value)
                                     }
-                                    Label { text: qsTr("D") }
+                                    Label {
+                                        text: qsTr("D")
+                                    }
                                 }
                                 GridLayout {
                                     columns: 2
@@ -537,21 +619,27 @@ ApplicationWindow {
                                     rowSpacing: 4
                                     Layout.fillWidth: true
 
-                                    Label { text: qsTr("Coupling:"); Layout.column: 0; Layout.row: 0 }
+                                    Label {
+                                        text: qsTr("Coupling:"); Layout.column: 0; Layout.row: 0
+                                    }
                                     ComboBox {
                                         Layout.column: 1; Layout.row: 0
                                         Layout.fillWidth: true
                                         model: ["DC", "AC", "GND"]
                                         onActivated: oscillo.ch4_coupling_selected(model[index])
                                     }
-                                    Label { text: qsTr("Probe:"); Layout.column: 0; Layout.row: 1 }
+                                    Label {
+                                        text: qsTr("Probe:"); Layout.column: 0; Layout.row: 1
+                                    }
                                     ComboBox {
                                         Layout.column: 1; Layout.row: 1
                                         Layout.fillWidth: true
                                         model: ["1×", "10×"]
                                         onActivated: oscillo.ch4_probe_selected(model[index])
                                     }
-                                    Label { text: qsTr("Current:"); Layout.column: 0; Layout.row: 2 }
+                                    Label {
+                                        text: qsTr("Current:"); Layout.column: 0; Layout.row: 2
+                                    }
                                     TextField {
                                         Layout.column: 1; Layout.row: 2
                                         Layout.fillWidth: true
@@ -579,18 +667,30 @@ ApplicationWindow {
                     TabBar {
                         id: miscTabBar
                         Layout.fillWidth: true
-                        TabButton { text: qsTr("Measure") }
-                        TabButton { text: qsTr("Cursor") }
-                        TabButton { text: qsTr("Math") }
+                        TabButton {
+                            text: qsTr("Measure")
+                        }
+                        TabButton {
+                            text: qsTr("Cursor")
+                        }
+                        TabButton {
+                            text: qsTr("Math")
+                        }
                     }
                     StackLayout {
                         id: miscStack
                         Layout.fillWidth: true
                         currentIndex: miscTabBar.currentIndex
 
-                        ColumnLayout { Layout.fillWidth: true }   /* Measure */
-                        ColumnLayout { Layout.fillWidth: true }   /* Cursor */
-                        ColumnLayout { Layout.fillWidth: true }   /* Math */
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                        }   /* Measure */
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                        }   /* Cursor */
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                        }   /* Math */
                     }
                 }
             }
@@ -611,7 +711,9 @@ ApplicationWindow {
             }
             RowLayout {
                 spacing: 4
-                Label { text: qsTr("Style:") }
+                Label {
+                    text: qsTr("Style:")
+                }
                 ComboBox {
                     id: styleCombo
                     model: ["Fusion", "Imagine", "Material"]
