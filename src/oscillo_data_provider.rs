@@ -33,11 +33,8 @@ pub fn fetch_waveform_from_env(channel: u8) -> Result<Waveform, Box<dyn Error>> 
 pub fn fetch_rigol_ds1000z_waveform(addr: &str, channel: u8) -> Result<Waveform, Box<dyn Error>> {
     let mut instr = Instrument::connect(addr)?;
 
-    // Stabil "snapshot": stop -> query -> run (restore best-effort)
-    instr.write(":STOP")?;
-    let res = fetch_rigol_ds1000z_waveform_from_connected(&mut instr, channel);
-    let _ = instr.write(":RUN");
-    res
+    // NORM mode: screen content (gyors, és azt tükrözi, ami a kijelzőn van)
+    fetch_rigol_ds1000z_waveform_from_connected(&mut instr, channel)
 }
 
 fn fetch_rigol_ds1000z_waveform_from_connected(
@@ -50,11 +47,13 @@ fn fetch_rigol_ds1000z_waveform_from_connected(
     instr.write(&format!(":WAV:SOUR CHAN{}", chan))?;
 
     // Best-effort configuration (ignore errors for compatibility)
-    let _ = instr.write(":WAV:MODE RAW");
+    // A kijelzőn látható jelhez NORM a jó (DS1000Z: 1200 pont / teljes képernyőszélesség).
+    let _ = instr.write(":WAV:MODE NORM");
     let _ = instr.write(":WAV:FORM BYTE");
 
     // Preamble (try a few variants)
-    let preamble_str = query_line_fallback(instr, &[":WAV:PRE?", ":WAV:PREAMBLE?", ":WAV:PREamble?"])?;
+    let preamble_str =
+        query_line_fallback(instr, &[":WAV:PRE?", ":WAV:PREAMBLE?", ":WAV:PREamble?"])?;
     let pre = parse_rigol_preamble(&preamble_str)?;
 
     // Best-effort: try to request full record in one block
@@ -127,7 +126,7 @@ fn parse_rigol_preamble(s: &str) -> Result<RigolPreamble, Box<dyn Error>> {
             parts.len(),
             s.trim()
         )
-            .into());
+        .into());
     }
 
     let points = parts[2].parse::<usize>().unwrap_or(0);

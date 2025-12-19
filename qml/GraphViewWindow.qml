@@ -11,8 +11,10 @@ ApplicationWindow {
     width: 1000
     height: 600
     title: qsTr("Graph View Test")
-    property real t: 0.0
-    property bool extraSeriesAdded: false
+    // Live scope view settings
+    property int scopeChannel: 1
+    property int refreshMs: 200
+    property bool live: true
 
     ColumnLayout {
         anchors.fill: parent
@@ -91,6 +93,50 @@ ApplicationWindow {
                     graph.requestRepaint();
                 }
             }
+            Item {
+                Layout.fillWidth: true
+            } // spacer
+
+            Label {
+                text: qsTr("Channel:")
+            }
+            ComboBox {
+                id: channelCombo
+                model: [1, 2, 3, 4]
+                currentIndex: window.scopeChannel - 1
+                onCurrentIndexChanged: {
+                    window.scopeChannel = currentIndex + 1
+                    // channel váltáskor menjen vissza autoscale-ra
+                    graph.xAutoRange = true
+                    graph.yAutoRange = true
+                    graph.resetZoom()
+                    if (window.live) {
+                        graph.startLive(window.scopeChannel, window.refreshMs)
+                    } else {
+                        graph.loadOscilloscopeData(window.scopeChannel)
+                    }
+                }
+            }
+
+            CheckBox {
+                id: liveChk
+                text: qsTr("Live")
+                checked: window.live
+                onToggled: {
+                    window.live = checked
+                    if (checked) {
+                        graph.startLive(window.scopeChannel, window.refreshMs)
+                    } else {
+                        graph.stopLive()
+                    }
+                }
+            }
+
+            Button {
+                text: qsTr("Refresh")
+                onClicked: graph.loadOscilloscopeData(window.scopeChannel)
+            }
+
         }
 
         GraphObject {
@@ -101,12 +147,12 @@ ApplicationWindow {
             legendPosition: 1
             gridVisible: true
             xLabel: qsTr("Time (s)")
-            yLabel: qsTr("Value")
-            bufferSize: 100
+            // szkóp jellegű rács (Rigol DS1000Z tipikus: 12 osztás vízszint, 8 függőlegesen)
+            xDivisions: 12
+            yDivisions: 8
 
             Component.onCompleted: {
-                graph.addSeries("Analog1", 0, Qt.rgba(1, 0, 0, 1), 2.0, 1, false)
-                graph.addSeries("Digital1", 2, Qt.rgba(0, 1, 0, 1), 2.0, 1, false)
+                graph.startLive(window.scopeChannel, window.refreshMs)
             }
 
             MouseArea {
@@ -241,17 +287,16 @@ ApplicationWindow {
             }
         }
     }
+    // UI-thread pump: csak a legfrissebb már lekért waveform-ot húzza be, nem blokkol IO-val
     Timer {
-        interval: 50
-        running: true
+        interval: 30
+        running: window.live
         repeat: true
-        onTriggered: {
-            var analogVal = Math.sin(2 * Math.PI * 1 * window.t)
-            var digitalVal = (Math.floor(window.t) % 2 === 0) ? 1 : 0
-            graph.addDataPoint("Analog1", window.t, analogVal)
-            graph.addDataPoint("Digital1", window.t, digitalVal)
-            window.t += 0.05
-        }
+        onTriggered: graph.pumpLive()
+    }
+
+    onClosing: {
+        graph.stopLive()
     }
 
     Menu {
