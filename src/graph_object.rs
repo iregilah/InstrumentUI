@@ -1256,10 +1256,7 @@ impl graph_object_qobject::GraphObject {
                 pinned_painter.as_mut().save();
                 // Determine position roughly center left, rotated -90
                 let center_y = plot_y + plot_height / 2.0;
-                let text_x = 15.0;
-                let text_y = center_y;
-                // Translate and rotate
-                let offset = QPoint::new(text_x.round() as i32, text_y.round() as i32);
+                let offset = QPoint::new(15, center_y.round() as i32);
                 pinned_painter.as_mut().translate(&offset);
                 pinned_painter.as_mut().rotate(-90.0);
                 draw_text(&mut pinned_painter, 0.0, 0.0, &this.y_label);
