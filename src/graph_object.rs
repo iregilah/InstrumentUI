@@ -51,9 +51,9 @@ pub mod graph_object_qobject {
         type GraphObject = super::GraphObjectRust;
     }
     impl cxx_qt::Threading for GraphObject {}
+    
 
-    impl cxx_qt::Constructor<(*mut QQuickItem,), BaseArguments = (*mut QQuickItem,)> for GraphObject {}
-
+    impl cxx_qt::Constructor<()> for GraphObject {}
     extern "RustQt" {
         #[qinvokable]
         fn add_series(
@@ -122,23 +122,15 @@ pub mod graph_object_qobject {
 }
 
 // Custom constructor implementáció (QQuickItem* parent)
-impl cxx_qt::Constructor<(*mut graph_object_qobject::QQuickItem,)>
-    for graph_object_qobject::GraphObject
-{
+impl cxx_qt::Constructor<()> for graph_object_qobject::GraphObject {
     type NewArguments = ();
-    type BaseArguments = (*mut graph_object_qobject::QQuickItem,);
+    type BaseArguments = ();
     type InitializeArguments = ();
-    fn route_arguments(
-        arguments: (*mut graph_object_qobject::QQuickItem,),
-    ) -> (
-        Self::NewArguments,
-        Self::BaseArguments,
-        Self::InitializeArguments,
-    ) {
-        ((), arguments, ())
-    }
+    fn route_arguments(_: ()) -> (Self::NewArguments, Self::BaseArguments, Self::InitializeArguments) {
+                ((), (), ())
+            }
 
-    fn new(_arguments: Self::NewArguments) -> <Self as cxx_qt::CxxQtType>::Rust {
+    fn new((): Self::NewArguments) -> <Self as cxx_qt::CxxQtType>::Rust {
         GraphObjectRust::default()
     }
 }

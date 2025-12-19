@@ -52,7 +52,7 @@ pub mod heatmap_qobject {
         unsafe fn paint(self: Pin<&mut HeatmapObject>, painter: *mut QPainter);
     }
     // Custom constructor declaration (CXX-Qt generálja a C++ ctor-t QQuickItem* parenttel)
-    impl cxx_qt::Constructor<(*mut QQuickItem,), BaseArguments = (*mut QQuickItem,)> for HeatmapObject {}
+    impl cxx_qt::Constructor<()> for HeatmapObject {}
 
     unsafe extern "RustQt" {
         #[inherit]
@@ -66,13 +66,13 @@ pub mod heatmap_qobject {
 }
 
 // ---- Custom constructor implementation (C++ helper nélkül) ------------------
-impl cxx_qt::Constructor<(*mut heatmap_qobject::QQuickItem,)> for heatmap_qobject::HeatmapObject {
+impl cxx_qt::Constructor<()> for heatmap_qobject::HeatmapObject {
     type NewArguments = ();
-    type BaseArguments = (*mut heatmap_qobject::QQuickItem,);
+    type BaseArguments = ();
     type InitializeArguments = ();
 
     fn route_arguments(
-        args: (*mut heatmap_qobject::QQuickItem,),
+        _: (),
     ) -> (
         Self::NewArguments,
         Self::BaseArguments,
@@ -81,7 +81,7 @@ impl cxx_qt::Constructor<(*mut heatmap_qobject::QQuickItem,)> for heatmap_qobjec
         // 1) Rust struct: default
         // 2) Base ctor: QQuickPaintedItem(parent)
         // 3) initialize: nincs extra arg
-        ((), args, ())
+        ((), (), ())
     }
 
     fn new((): ()) -> HeatmapObjectRust {
