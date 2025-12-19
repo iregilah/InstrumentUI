@@ -11,6 +11,7 @@ ApplicationWindow {
     width: 1000
     height: 600
     title: qsTr("Graph View Test")
+    property real t: 0.0
     property bool extraSeriesAdded: false
 
     ColumnLayout {
@@ -104,29 +105,8 @@ ApplicationWindow {
             bufferSize: 100
 
             Component.onCompleted: {
-                graph.addSeries(QString("Analog1"), 0, Qt.rgba(1, 0, 0, 1), 2.0, 1, false)
-                graph.addSeries(QString("Digital1"), 2, Qt.rgba(0, 1, 0, 1), 2.0, 1, false)
-                var t = 0.0
-                Timer {
-                interval: 50
-                running: true
-                repeat: true
-                onTriggered: {
-                    var analogVal = Math.sin(2 * Math.PI * 1 * t)
-                    var digitalVal = (Math.floor(t) % 2 === 0) ? 1 : 0
-                    graph.addDataPoint(QString("Analog1"), t, analogVal)
-                    graph.addDataPoint(QString("Digital1"), t, digitalVal)
-                    if (!window.extraSeriesAdded && t >= 2.0) {
-                        window.extraSeriesAdded = true
-                        graph.addSeries(QString("Analog2"), 0, Qt.rgba(0, 0, 1, 1), 2.0, 1, false)
-                    }
-                    if (window.extraSeriesAdded) {
-                        var analogVal2 = Math.cos(2 * Math.PI * 1 * t)
-                        graph.addDataPoint(QString("Analog2"), t, analogVal2)
-                    }
-                    t += 0.05
-                }
-            }
+                graph.addSeries("Analog1", 0, Qt.rgba(1, 0, 0, 1), 2.0, 1, false)
+                graph.addSeries("Digital1", 2, Qt.rgba(0, 1, 0, 1), 2.0, 1, false)
             }
 
             MouseArea {
@@ -259,6 +239,18 @@ ApplicationWindow {
                     result.saveToFile(filePath)
                 })
             }
+        }
+    }
+    Timer {
+        interval: 50
+        running: true
+        repeat: true
+        onTriggered: {
+            var analogVal = Math.sin(2 * Math.PI * 1 * window.t)
+            var digitalVal = (Math.floor(window.t) % 2 === 0) ? 1 : 0
+            graph.addDataPoint("Analog1", window.t, analogVal)
+            graph.addDataPoint("Digital1", window.t, digitalVal)
+            window.t += 0.05
         }
     }
 
