@@ -15,6 +15,7 @@ pub mod aggregator;
 pub mod instrument;
 pub mod graph_object;
 pub mod heatmap_object;
+mod oscillo_data_provider;
 
 /// Gyors eléréshez egy mini‑prelude:
 pub use prelude::*;
