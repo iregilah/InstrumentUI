@@ -1,10 +1,10 @@
 // src/main.rs
 
-mod oscillo_object;
-mod awg_object;
-mod instrument_manager;
 mod aggregator;
+mod awg_object;
 mod instrument;
+mod instrument_manager;
+mod oscillo_object;
 use cxx_qt_lib::{QGuiApplication, QQmlApplicationEngine, QUrl};
 use std::{
     env, fs,
@@ -14,7 +14,11 @@ use std::{
 };
 
 fn normalize_addr(s: &str) -> SocketAddr {
-    let s = if s.contains(':') { s.to_string() } else { format!("{s}:5555") };
+    let s = if s.contains(':') {
+        s.to_string()
+    } else {
+        format!("{s}:5555")
+    };
     s.parse().expect("Érvénytelen IP:port formátum")
 }
 
@@ -62,7 +66,10 @@ fn with_23_24_fallback(addr: SocketAddr) -> SocketAddr {
                 return addr;
             }
             let alt_last = if o[3] == 23 { 24 } else { 23 };
-            let alt = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(o[0], o[1], o[2], alt_last)), addr.port());
+            let alt = SocketAddr::new(
+                IpAddr::V4(Ipv4Addr::new(o[0], o[1], o[2], alt_last)),
+                addr.port(),
+            );
             if try_connect(alt, 700).is_ok() {
                 return alt;
             }
@@ -118,6 +125,7 @@ fn main() {
         let main_url = QUrl::from("qrc:/qt/qml/InstrumentUI/qml/main.qml");
         let awg_url = QUrl::from("qrc:/qt/qml/InstrumentUI/qml/awg.qml");
         let hub_url = QUrl::from("qrc:/qt/qml/InstrumentUI/qml/hub.qml");
+        let graph_url = QUrl::from("qrc:/qt/qml/InstrumentUI/qml/GraphViewWindow.qml");
 
         eng.as_mut().load(&main_url);
         println!("[QML] Main UI loaded");
@@ -127,6 +135,9 @@ fn main() {
 
         eng.as_mut().load(&awg_url);
         println!("[QML] Function Generator UI loaded");
+
+        eng.as_mut().load(&graph_url);
+        println!("[QML] Graph View UI loaded");
 
         eng.as_mut()
             .as_qqmlengine()
