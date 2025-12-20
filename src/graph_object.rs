@@ -352,168 +352,168 @@ impl graph_object_qobject::GraphObject {
     }
 
     fn setup_painter(
-        +        self: Pin<&Self>,
-        +        painter: &mut Pin<&mut graph_object_qobject::QPainter>,
-        +    ) {
-        +        painter
-        +            .as_mut()
-        +            .set_render_hint(QPainterRenderHint::Antialiasing, true);
-        +        painter
-        +            .as_mut()
-        +            .set_render_hint(QPainterRenderHint::TextAntialiasing, true);
-        +    }
-        +
-        +    fn draw_line(
-        +        self: Pin<&Self>,
-        +        painter: &mut Pin<&mut graph_object_qobject::QPainter>,
-        +        x1: f64,
-        +        y1: f64,
-        +        x2: f64,
-        +        y2: f64,
-        +    ) {
-        +        let mut line = QLineF::default();
-        +        line.set_line(x1, y1, x2, y2);
-        +        painter.as_mut().draw_linef(&line);
-        +    }
-        +
-        +    fn draw_text(
-        +        self: Pin<&Self>,
-        +        painter: &mut Pin<&mut graph_object_qobject::QPainter>,
-        +        x: f64,
-        +        y: f64,
-        +        text: &QString,
-        +    ) {
-        +        let pt = QPoint::new(x.round() as i32, y.round() as i32);
-        +        painter.as_mut().draw_text(&pt, text);
-        +    }
-        +
-        +    fn pixel_x(
-        +        self: Pin<&Self>,
-        +        x: f64,
-        +        x_min: f64,
-        +        x_max: f64,
-        +        plot_x: f64,
-        +        plot_width: f64,
-        +    ) -> Option<f64> {
-        +        let this = self.rust();
-        +        if this.x_log_scale {
-        +            if x <= 0.0 {
-        +                None
-        +            } else {
-        +                let log_min = x_min.log10();
-        +                let log_max = x_max.log10();
-        +                Some(plot_x + ((x.log10() - log_min) / (log_max - log_min)) * plot_width)
-        +            }
-        +        } else {
-        +            Some(plot_x + ((x - x_min) / (x_max - x_min)) * plot_width)
-        +        }
-        +    }
-        +
-        +    fn pixel_y(
-        +        self: Pin<&Self>,
-        +        y: f64,
-        +        y_min: f64,
-        +        y_max: f64,
-        +        plot_y: f64,
-        +        plot_height: f64,
-        +    ) -> Option<f64> {
-        +        let this = self.rust();
-        +        if this.y_log_scale {
-        +            if y <= 0.0 {
-        +                None
-        +            } else {
-        +                let log_min = y_min.log10();
-        +                let log_max = y_max.log10();
-        +                Some(
-        +                    plot_y + plot_height
-        +                        - ((y.log10() - log_min) / (log_max - log_min)) * plot_height,
-        +                )
-        +            }
-        +        } else {
-        +            Some(plot_y + plot_height - ((y - y_min) / (y_max - y_min)) * plot_height)
-        +        }
-        +    }
-        +
-        +    fn pixel_y_separate(
-        +        self: Pin<&Self>,
-        +        y: f64,
-        +        local_min: f64,
-        +        local_max: f64,
-        +        band_bottom_y: f64,
-        +        band_height: f64,
-        +    ) -> Option<f64> {
-        +        let this = self.rust();
-        +        if this.y_log_scale {
-        +            if y <= 0.0 {
-        +                None
-        +            } else {
-        +                let log_min = local_min.log10();
-        +                let log_max = local_max.log10();
-        +                let denom = (log_max - log_min).max(1e-9);
-        +                Some(band_bottom_y - ((y.log10() - log_min) / denom) * band_height)
-        +            }
-        +        } else {
-        +            Some(band_bottom_y - ((y - local_min) / (local_max - local_min)) * band_height)
-        +        }
-        +    }
-        +
-        +    fn draw_background(
-        +        self: Pin<&Self>,
-        +        painter: &mut Pin<&mut graph_object_qobject::QPainter>,
-        +        width: f64,
-        +        height: f64,
-        +    ) {
-        +        let this = self.rust();
-        +        let bg_color = if this.dark_mode {
-        +            QColor::from_rgb(0, 0, 0)
-        +        } else {
-        +            QColor::from_rgb(255, 255, 255)
-        +        };
-        +        painter
-        +            .as_mut()
-        +            .fill_rect(&QRectF::new(0.0, 0.0, width, height), &bg_color);
-        +    }
-        +
-        +    fn compute_plot_area(self: Pin<&Self>, width: f64, height: f64) -> (f64, f64, f64, f64, f64, f64) {
-        +        let this = self.rust();
-        +        let left_margin = 60.0;
-        +        let right_margin = 10.0;
-        +        let top_margin = if this.legend_visible && this.legend_position < 2 {
-        +            20.0
-        +        } else {
-        +            10.0
-        +        };
-        +        let bottom_margin = 50.0;
-        +
-        +        let plot_x = left_margin;
-        +        let plot_y = top_margin;
-        +        let plot_width = (width - left_margin - right_margin).max(1.0);
-        +        let plot_height = (height - top_margin - bottom_margin).max(1.0);
-        +
-        +        let x_axis_y = plot_y + plot_height;
-        +        let y_axis_x = plot_x;
-        +        (plot_x, plot_y, plot_width, plot_height, x_axis_y, y_axis_x)
-        +    }
-        +
-        +    fn effective_x_range(self: Pin<&Self>) -> (f64, f64) {
-        +        let this = self.rust();
-        +        if this.x_log_scale {
-        +            if this.x_max <= 0.0 {
-        +                (0.1, 1.0)
-        +            } else {
-        +                let min_val = if this.x_min > 0.0 {
-        +                    this.x_min
-        +                } else {
-        +                    (this.x_max / 1e6).max(1e-9)
-        +                };
-        +                (min_val, this.x_max)
-        +            }
-        +        } else {
-        +            (this.x_min, this.x_max)
-        +        }
-        +    }
-        +
-        +    fn effective_y_range(self: Pin<&Self>) -> (f64, f64) {
+                self: Pin<&Self>,
+                painter: &mut Pin<&mut graph_object_qobject::QPainter>,
+            ) {
+                painter
+                    .as_mut()
+                    .set_render_hint(QPainterRenderHint::Antialiasing, true);
+                painter
+                    .as_mut()
+                    .set_render_hint(QPainterRenderHint::TextAntialiasing, true);
+            }
+
+            fn draw_line(
+                self: Pin<&Self>,
+                painter: &mut Pin<&mut graph_object_qobject::QPainter>,
+                x1: f64,
+                y1: f64,
+                x2: f64,
+                y2: f64,
+            ) {
+                let mut line = QLineF::default();
+                line.set_line(x1, y1, x2, y2);
+                painter.as_mut().draw_linef(&line);
+            }
+
+            fn draw_text(
+                self: Pin<&Self>,
+                painter: &mut Pin<&mut graph_object_qobject::QPainter>,
+                x: f64,
+                y: f64,
+                text: &QString,
+            ) {
+                let pt = QPoint::new(x.round() as i32, y.round() as i32);
+                painter.as_mut().draw_text(&pt, text);
+            }
+
+            fn pixel_x(
+                self: Pin<&Self>,
+                x: f64,
+                x_min: f64,
+                x_max: f64,
+                plot_x: f64,
+                plot_width: f64,
+            ) -> Option<f64> {
+                let this = self.rust();
+                if this.x_log_scale {
+                    if x <= 0.0 {
+                        None
+                    } else {
+                        let log_min = x_min.log10();
+                        let log_max = x_max.log10();
+                        Some(plot_x + ((x.log10() - log_min) / (log_max - log_min)) * plot_width)
+                    }
+                } else {
+                    Some(plot_x + ((x - x_min) / (x_max - x_min)) * plot_width)
+                }
+            }
+
+            fn pixel_y(
+                self: Pin<&Self>,
+                y: f64,
+                y_min: f64,
+                y_max: f64,
+                plot_y: f64,
+                plot_height: f64,
+            ) -> Option<f64> {
+                let this = self.rust();
+                if this.y_log_scale {
+                    if y <= 0.0 {
+                        None
+                    } else {
+                        let log_min = y_min.log10();
+                        let log_max = y_max.log10();
+                        Some(
+                            plot_y + plot_height
+                                - ((y.log10() - log_min) / (log_max - log_min)) * plot_height,
+                        )
+                    }
+                } else {
+                    Some(plot_y + plot_height - ((y - y_min) / (y_max - y_min)) * plot_height)
+                }
+            }
+
+            fn pixel_y_separate(
+                self: Pin<&Self>,
+                y: f64,
+                local_min: f64,
+                local_max: f64,
+                band_bottom_y: f64,
+                band_height: f64,
+            ) -> Option<f64> {
+                let this = self.rust();
+                if this.y_log_scale {
+                    if y <= 0.0 {
+                        None
+                    } else {
+                        let log_min = local_min.log10();
+                        let log_max = local_max.log10();
+                        let denom = (log_max - log_min).max(1e-9);
+                        Some(band_bottom_y - ((y.log10() - log_min) / denom) * band_height)
+                    }
+                } else {
+                    Some(band_bottom_y - ((y - local_min) / (local_max - local_min)) * band_height)
+                }
+            }
+
+            fn draw_background(
+                self: Pin<&Self>,
+                painter: &mut Pin<&mut graph_object_qobject::QPainter>,
+                width: f64,
+                height: f64,
+            ) {
+                let this = self.rust();
+                let bg_color = if this.dark_mode {
+                    QColor::from_rgb(0, 0, 0)
+                } else {
+                    QColor::from_rgb(255, 255, 255)
+                };
+                painter
+                    .as_mut()
+                    .fill_rect(&QRectF::new(0.0, 0.0, width, height), &bg_color);
+            }
+
+            fn compute_plot_area(self: Pin<&Self>, width: f64, height: f64) -> (f64, f64, f64, f64, f64, f64) {
+                let this = self.rust();
+                let left_margin = 60.0;
+                let right_margin = 10.0;
+                let top_margin = if this.legend_visible && this.legend_position < 2 {
+                    20.0
+                } else {
+                    10.0
+                };
+                let bottom_margin = 50.0;
+
+                let plot_x = left_margin;
+                let plot_y = top_margin;
+                let plot_width = (width - left_margin - right_margin).max(1.0);
+                let plot_height = (height - top_margin - bottom_margin).max(1.0);
+
+                let x_axis_y = plot_y + plot_height;
+                let y_axis_x = plot_x;
+                (plot_x, plot_y, plot_width, plot_height, x_axis_y, y_axis_x)
+            }
+
+            fn effective_x_range(self: Pin<&Self>) -> (f64, f64) {
+                let this = self.rust();
+                if this.x_log_scale {
+                    if this.x_max <= 0.0 {
+                        (0.1, 1.0)
+                    } else {
+                        let min_val = if this.x_min > 0.0 {
+                            this.x_min
+                        } else {
+                            (this.x_max / 1e6).max(1e-9)
+                        };
+                        (min_val, this.x_max)
+                    }
+                } else {
+                    (this.x_min, this.x_max)
+                }
+            }
+
+            fn effective_y_range(self: Pin<&Self>) -> (f64, f64) {
                 let this = self.rust();
                 if this.y_log_scale {
                     if this.y_max <= 0.0 {
