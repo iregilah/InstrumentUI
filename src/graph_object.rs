@@ -362,8 +362,8 @@ impl graph_object_qobject::GraphObject {
         +            .as_mut()
         +            .set_render_hint(QPainterRenderHint::TextAntialiasing, true);
         +    }
-    +
-    +    fn draw_line(
+        +
+        +    fn draw_line(
         +        self: Pin<&Self>,
         +        painter: &mut Pin<&mut graph_object_qobject::QPainter>,
         +        x1: f64,
@@ -375,8 +375,8 @@ impl graph_object_qobject::GraphObject {
         +        line.set_line(x1, y1, x2, y2);
         +        painter.as_mut().draw_linef(&line);
         +    }
-    +
-    +    fn draw_text(
+        +
+        +    fn draw_text(
         +        self: Pin<&Self>,
         +        painter: &mut Pin<&mut graph_object_qobject::QPainter>,
         +        x: f64,
@@ -386,8 +386,8 @@ impl graph_object_qobject::GraphObject {
         +        let pt = QPoint::new(x.round() as i32, y.round() as i32);
         +        painter.as_mut().draw_text(&pt, text);
         +    }
-    +
-    +    fn pixel_x(
+        +
+        +    fn pixel_x(
         +        self: Pin<&Self>,
         +        x: f64,
         +        x_min: f64,
@@ -408,8 +408,8 @@ impl graph_object_qobject::GraphObject {
         +            Some(plot_x + ((x - x_min) / (x_max - x_min)) * plot_width)
         +        }
         +    }
-    +
-    +    fn pixel_y(
+        +
+        +    fn pixel_y(
         +        self: Pin<&Self>,
         +        y: f64,
         +        y_min: f64,
@@ -433,8 +433,8 @@ impl graph_object_qobject::GraphObject {
         +            Some(plot_y + plot_height - ((y - y_min) / (y_max - y_min)) * plot_height)
         +        }
         +    }
-    +
-    +    fn pixel_y_separate(
+        +
+        +    fn pixel_y_separate(
         +        self: Pin<&Self>,
         +        y: f64,
         +        local_min: f64,
@@ -456,8 +456,8 @@ impl graph_object_qobject::GraphObject {
         +            Some(band_bottom_y - ((y - local_min) / (local_max - local_min)) * band_height)
         +        }
         +    }
-    +
-    +    fn draw_background(
+        +
+        +    fn draw_background(
         +        self: Pin<&Self>,
         +        painter: &mut Pin<&mut graph_object_qobject::QPainter>,
         +        width: f64,
@@ -473,8 +473,8 @@ impl graph_object_qobject::GraphObject {
         +            .as_mut()
         +            .fill_rect(&QRectF::new(0.0, 0.0, width, height), &bg_color);
         +    }
-    +
-    +    fn compute_plot_area(self: Pin<&Self>, width: f64, height: f64) -> (f64, f64, f64, f64, f64, f64) {
+        +
+        +    fn compute_plot_area(self: Pin<&Self>, width: f64, height: f64) -> (f64, f64, f64, f64, f64, f64) {
         +        let this = self.rust();
         +        let left_margin = 60.0;
         +        let right_margin = 10.0;
@@ -494,8 +494,8 @@ impl graph_object_qobject::GraphObject {
         +        let y_axis_x = plot_x;
         +        (plot_x, plot_y, plot_width, plot_height, x_axis_y, y_axis_x)
         +    }
-    +
-    +    fn effective_x_range(self: Pin<&Self>) -> (f64, f64) {
+        +
+        +    fn effective_x_range(self: Pin<&Self>) -> (f64, f64) {
         +        let this = self.rust();
         +        if this.x_log_scale {
         +            if this.x_max <= 0.0 {
@@ -512,8 +512,8 @@ impl graph_object_qobject::GraphObject {
         +            (this.x_min, this.x_max)
         +        }
         +    }
-    +
-    +    fn effective_y_range(self: Pin<&Self>) -> (f64, f64) {
+        +
+        +    fn effective_y_range(self: Pin<&Self>) -> (f64, f64) {
         +        let this = self.rust();
         +        if this.y_log_scale {
         +            if this.y_max <= 0.0 {
@@ -530,8 +530,8 @@ impl graph_object_qobject::GraphObject {
         +            (this.y_min, this.y_max)
         +        }
         +    }
-    +
-    +    fn draw_grid_and_axes(
+        +
+        +    fn draw_grid_and_axes(
         +        self: Pin<&Self>,
         +        painter: &mut Pin<&mut graph_object_qobject::QPainter>,
         +        plot_x: f64,
@@ -631,8 +631,8 @@ impl graph_object_qobject::GraphObject {
         +        painter.as_mut().set_pen(&axis_pen2);
         +        self.draw_line(painter, plot_x, x_axis_y, plot_x + plot_width, x_axis_y);
         +    }
-    +
-    +    fn draw_x_axis_ticks_and_labels(
+        +
+        +    fn draw_x_axis_ticks_and_labels(
         +        self: Pin<&Self>,
         +        painter: &mut Pin<&mut graph_object_qobject::QPainter>,
         +        plot_x: f64,
@@ -687,8 +687,8 @@ impl graph_object_qobject::GraphObject {
         +            }
         +        }
         +    }
-    +
-    +    fn draw_y_axis_ticks_and_labels(
+        +
+        +    fn draw_y_axis_ticks_and_labels(
         +        self: Pin<&Self>,
         +        painter: &mut Pin<&mut graph_object_qobject::QPainter>,
         +        plot_x: f64,
@@ -744,8 +744,8 @@ impl graph_object_qobject::GraphObject {
         +            }
         +        }
         +    }
-    +
-    +    fn draw_axis_labels(
+        +
+        +    fn draw_axis_labels(
         +        self: Pin<&Self>,
         +        painter: &mut Pin<&mut graph_object_qobject::QPainter>,
         +        plot_x: f64,
@@ -802,8 +802,8 @@ impl graph_object_qobject::GraphObject {
         +            painter.as_mut().restore();
         +        }
         +    }
-    +
-    +    fn draw_series_data(
+        +
+        +    fn draw_series_data(
         +        self: Pin<&Self>,
         +        painter: &mut Pin<&mut graph_object_qobject::QPainter>,
         +        plot_x: f64,
@@ -918,8 +918,8 @@ impl graph_object_qobject::GraphObject {
         +            }
         +        }
         +    }
-    +
-    +    fn draw_digital_series_combined(
+        +
+        +    fn draw_digital_series_combined(
         +        self: Pin<&Self>,
         +        painter: &mut Pin<&mut graph_object_qobject::QPainter>,
         +        s: &DataSeries,
@@ -958,8 +958,8 @@ impl graph_object_qobject::GraphObject {
         +            }
         +        }
         +    }
-    +
-    +    fn draw_analog_series_combined(
+        +
+        +    fn draw_analog_series_combined(
         +        self: Pin<&Self>,
         +        painter: &mut Pin<&mut graph_object_qobject::QPainter>,
         +        s: &DataSeries,
@@ -992,8 +992,8 @@ impl graph_object_qobject::GraphObject {
         +            self.draw_line(painter, x1, y1, x2, y2);
         +        }
         +    }
-    +
-    +    fn draw_markers_combined(
+        +
+        +    fn draw_markers_combined(
         +        self: Pin<&Self>,
         +        painter: &mut Pin<&mut graph_object_qobject::QPainter>,
         +        s: &DataSeries,
@@ -1025,8 +1025,8 @@ impl graph_object_qobject::GraphObject {
         +            painter.as_mut().fill_rect(&rect, &s.color);
         +        }
         +    }
-    +
-    +    fn draw_series_separate(
+        +
+        +    fn draw_series_separate(
         +        self: Pin<&Self>,
         +        painter: &mut Pin<&mut graph_object_qobject::QPainter>,
         +        si: usize,
@@ -1109,8 +1109,8 @@ impl graph_object_qobject::GraphObject {
         +            );
         +        }
         +    }
-    +
-    +    fn draw_digital_series_separate(
+        +
+        +    fn draw_digital_series_separate(
         +        self: Pin<&Self>,
         +        painter: &mut Pin<&mut graph_object_qobject::QPainter>,
         +        s: &DataSeries,
@@ -1159,8 +1159,8 @@ impl graph_object_qobject::GraphObject {
         +            }
         +        }
         +    }
-    +
-    +    fn draw_analog_series_separate(
+        +
+        +    fn draw_analog_series_separate(
         +        self: Pin<&Self>,
         +        painter: &mut Pin<&mut graph_object_qobject::QPainter>,
         +        s: &DataSeries,
@@ -1206,8 +1206,8 @@ impl graph_object_qobject::GraphObject {
         +            self.draw_line(painter, x1, y1, x2, y2);
         +        }
         +    }
-    +
-    +    fn draw_markers_separate(
+        +
+        +    fn draw_markers_separate(
         +        self: Pin<&Self>,
         +        painter: &mut Pin<&mut graph_object_qobject::QPainter>,
         +        s: &DataSeries,
@@ -1244,8 +1244,8 @@ impl graph_object_qobject::GraphObject {
         +            painter.as_mut().fill_rect(&rect, &s.color);
         +        }
         +    }
-    +
-    +    fn draw_legend(
+        +
+        +    fn draw_legend(
         +        self: Pin<&Self>,
         +        painter: &mut Pin<&mut graph_object_qobject::QPainter>,
         +        plot_x: f64,
@@ -1322,8 +1322,8 @@ impl graph_object_qobject::GraphObject {
         +            );
         +        }
         +    }
-    +
-    +    fn draw_cursors(
+        +
+        +    fn draw_cursors(
         +        self: Pin<&Self>,
         +        painter: &mut Pin<&mut graph_object_qobject::QPainter>,
         +        plot_x: f64,
