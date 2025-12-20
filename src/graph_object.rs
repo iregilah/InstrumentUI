@@ -460,16 +460,36 @@ impl graph_object_qobject::GraphObject {
         } else {
             channel as u8
         };
-
         let wf = match oscillo_data_provider::fetch_waveform_from_env(chan) {
             Ok(w) => w,
             Err(_) => {
-                // No text output here: just keep UI responsive.
                 self.update();
                 return;
             }
         };
-        self.as_mut().apply_waveform(chan, wf);
+        let mode = { self.as_ref().rust().mode };
+        if mode == 2 {
+            // Triggered mode: replace capture directly
+            self.as_mut().apply_waveform(chan, wf);
+            {
+                let mut this = self.as_mut().rust_mut();
+                this.live_channel = chan;
+                if !this.initial_x_set && !this.series_list.is_empty() {
+                    this.initial_x_set = true;
+                }
+            }
+            return;
+        }
+        // For compress and scroll modes, enqueue data and reuse pumpLive logic
+        {
+            let mut this = self.as_mut().rust_mut();
+            this.live_channel = chan;
+        }
+        let latest = { self.as_ref().rust().live_latest.clone() };
+        if let Ok(mut lock) = latest.lock() {
+            *lock = Some(wf);
+        }
+        self.as_mut().pump_live();
     }
     fn apply_waveform(mut self: Pin<&mut Self>, chan: u8, wf: oscillo_data_provider::Waveform) {
         let series_name = format!("C{}", chan);
@@ -660,15 +680,272 @@ impl graph_object_qobject::GraphObject {
     }
 
     pub fn pump_live(mut self: Pin<&mut Self>) {
-        let chan = { self.as_ref().rust().live_channel };
+        let mode = { self.as_ref().rust().mode };
         let latest = { self.as_ref().rust().live_latest.clone() };
         let wf_opt = match latest.lock() {
             Ok(mut lock) => lock.take(),
             Err(_) => None,
         };
-        if let Some(wf) = wf_opt {
+
+        let Some(wf) = wf_opt else {
+            return;
+        };
+
+        let chan = { self.as_ref().rust().live_channel };
+
+        if mode == 2 {
             self.as_mut().apply_waveform(chan, wf);
+            {
+                let mut this = self.as_mut().rust_mut();
+                if !this.initial_x_set && !this.series_list.is_empty() {
+                    this.initial_x_set = true;
+                }
+            }
+            return;
         }
+
+        let mut x_range_update: Option<(f64, f64)> = None;
+        let mut y_range_update: Option<(f64, f64)> = None;
+
+        {
+            let mut this = self.as_mut().rust_mut();
+
+            this.x_label = QString::from(wf.x_label.as_str());
+            this.y_label = QString::from(wf.y_label.as_str());
+            this.x_unit = QString::from(wf.x_unit.as_str());
+            this.y_unit = QString::from(wf.y_unit.as_str());
+
+            let series_name = format!("C{}", chan);
+            let color = match chan {
+                1 => QColor::from_rgb(255, 255, 0),
+                2 => QColor::from_rgb(0, 255, 255),
+                3 => QColor::from_rgb(255, 0, 255),
+                4 => QColor::from_rgb(0, 255, 0),
+                _ => QColor::from_rgb(255, 255, 255),
+            };
+
+            let idx = match this.series_list.iter().position(|s| s.name == series_name) {
+                Some(i) => i,
+                None => {
+                    this.series_list.push(DataSeries {
+                        name: series_name.clone(),
+                        is_digital: false,
+                        color: color.clone(),
+                        thickness: 2.0,
+                        line_style: 1,
+                        marker: false,
+                        data_x: Vec::new(),
+                        data_y: Vec::new(),
+                        min_y: 0.0,
+                        max_y: 0.0,
+                    });
+                    this.series_list.len() - 1
+                }
+            };
+
+            let mut new_x = wf.x;
+            let new_y = wf.y;
+
+            if !new_x.is_empty() {
+                let first_new_x = new_x[0];
+                let dt = if new_x.len() > 1 {
+                    new_x[1] - new_x[0]
+                } else {
+                    0.0
+                };
+
+                let last_old_x = this.series_list[idx].data_x.last().copied();
+                let mut offset = 0.0;
+
+                if let Some(last_old_x) = last_old_x {
+                    if first_new_x <= last_old_x {
+                        offset = last_old_x + dt - first_new_x;
+                    }
+                } else {
+                    let mut global_last: Option<f64> = None;
+                    for (i, s) in this.series_list.iter().enumerate() {
+                        if i == idx {
+                            continue;
+                        }
+                        if let Some(&lx) = s.data_x.last() {
+                            global_last = Some(match global_last {
+                                Some(g) => g.max(lx),
+                                None => lx,
+                            });
+                        }
+                    }
+                    if let Some(gl) = global_last {
+                        if first_new_x <= gl {
+                            offset = gl + dt - first_new_x;
+                        }
+                    }
+                }
+
+                if offset.is_finite() && offset != 0.0 {
+                    for xv in &mut new_x {
+                        *xv += offset;
+                    }
+                }
+            }
+
+            let mut batch_min = f64::INFINITY;
+            let mut batch_max = f64::NEG_INFINITY;
+            for &v in &new_y {
+                if v < batch_min {
+                    batch_min = v;
+                }
+                if v > batch_max {
+                    batch_max = v;
+                }
+            }
+
+            {
+                let series = &mut this.series_list[idx];
+                let old_len = series.data_x.len();
+
+                series.is_digital = false;
+                series.color = color;
+                series.thickness = 2.0;
+                series.line_style = 1;
+                series.marker = false;
+
+                if old_len == 0 {
+                    series.data_x = new_x;
+                    series.data_y = new_y;
+                    if batch_min.is_finite() && batch_max.is_finite() {
+                        series.min_y = batch_min;
+                        series.max_y = batch_max;
+                    } else {
+                        series.min_y = 0.0;
+                        series.max_y = 0.0;
+                    }
+                } else {
+                    series.data_x.extend(new_x);
+                    series.data_y.extend(new_y);
+                    if batch_min.is_finite() && batch_max.is_finite() {
+                        if batch_min < series.min_y {
+                            series.min_y = batch_min;
+                        }
+                        if batch_max > series.max_y {
+                            series.max_y = batch_max;
+                        }
+                    }
+                }
+
+                if series.data_y.is_empty() {
+                    series.min_y = 0.0;
+                    series.max_y = 0.0;
+                }
+            }
+
+            if mode == 1 {
+                let buf = this.buffer_size.max(1) as usize;
+                for s2 in this.series_list.iter_mut() {
+                    if s2.data_x.len() > buf {
+                        let drop_count = s2.data_x.len() - buf;
+                        s2.data_x.drain(0..drop_count);
+                        s2.data_y.drain(0..drop_count);
+
+                        if s2.data_y.is_empty() {
+                            s2.min_y = 0.0;
+                            s2.max_y = 0.0;
+                        } else {
+                            let mut s_min = f64::INFINITY;
+                            let mut s_max = f64::NEG_INFINITY;
+                            for &vy in &s2.data_y {
+                                if vy < s_min {
+                                    s_min = vy;
+                                }
+                                if vy > s_max {
+                                    s_max = vy;
+                                }
+                            }
+                            if !s_min.is_finite() || !s_max.is_finite() {
+                                s2.min_y = 0.0;
+                                s2.max_y = 1.0;
+                            } else {
+                                s2.min_y = s_min;
+                                s2.max_y = s_max;
+                            }
+                        }
+                    }
+                }
+            }
+
+            if this.x_auto_range {
+                let mut xmin_all = f64::INFINITY;
+                let mut xmax_all = f64::NEG_INFINITY;
+                for s2 in &this.series_list {
+                    if let (Some(&first), Some(&last)) = (s2.data_x.first(), s2.data_x.last()) {
+                        if first < xmin_all {
+                            xmin_all = first;
+                        }
+                        if last > xmax_all {
+                            xmax_all = last;
+                        }
+                    }
+                }
+                if !xmin_all.is_finite() || !xmax_all.is_finite() {
+                    xmin_all = 0.0;
+                    xmax_all = 1.0;
+                } else if (xmin_all - xmax_all).abs() < f64::EPSILON {
+                    xmax_all = xmin_all + 1.0;
+                }
+
+                match mode {
+                    0 => {
+                        if !this.initial_x_set {
+                            this.initial_x_set = true;
+                            this.x_min = xmin_all;
+                        } else if xmin_all < this.x_min {
+                            this.x_min = xmin_all;
+                        }
+                        this.x_max = xmax_all;
+                    }
+                    1 => {
+                        this.initial_x_set = true;
+                        this.x_min = xmin_all;
+                        this.x_max = xmax_all;
+                    }
+                    _ => {}
+                }
+                x_range_update = Some((this.x_min, this.x_max));
+            }
+
+            if this.y_auto_range {
+                let mut ymin_all = f64::INFINITY;
+                let mut ymax_all = f64::NEG_INFINITY;
+                for s2 in &this.series_list {
+                    if !s2.data_y.is_empty() {
+                        if s2.min_y < ymin_all {
+                            ymin_all = s2.min_y;
+                        }
+                        if s2.max_y > ymax_all {
+                            ymax_all = s2.max_y;
+                        }
+                    }
+                }
+                if !ymin_all.is_finite() || !ymax_all.is_finite() {
+                    ymin_all = 0.0;
+                    ymax_all = 1.0;
+                } else if (ymin_all - ymax_all).abs() < f64::EPSILON {
+                    ymax_all = ymin_all + 1.0;
+                }
+                this.y_min = ymin_all;
+                this.y_max = ymax_all;
+                y_range_update = Some((ymin_all, ymax_all));
+            }
+        }
+
+        if let Some((xmin, xmax)) = x_range_update {
+            self.as_mut().set_x_min(xmin);
+            self.as_mut().set_x_max(xmax);
+        }
+        if let Some((ymin, ymax)) = y_range_update {
+            self.as_mut().set_y_min(ymin);
+            self.as_mut().set_y_max(ymax);
+        }
+        self.update();
     }
     pub fn add_series(
         mut self: Pin<&mut Self>,
