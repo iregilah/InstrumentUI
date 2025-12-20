@@ -252,6 +252,11 @@ ApplicationWindow {
                         }
                     } else if (mouse.buttons === Qt.LeftButton && dragging && !panning) {
                         // (Optionally draw selection rectangle while dragging)
+                        selRect.x = Math.min(dragStartX, mouse.x);
+                        selRect.y = Math.min(dragStartY, mouse.y);
+                        selRect.width = Math.abs(mouse.x - dragStartX);
+                        selRect.height = Math.abs(mouse.y - dragStartY);
+                        selRect.visible = true;
                     }
                 }
                 WheelHandler {
@@ -263,6 +268,14 @@ ApplicationWindow {
                         var centerY = graph.yMax - py / graph.height * (graph.yMax - graph.yMin)
                         graph.zoomAtPoint(centerX, centerY, zoomFactor)
                     }
+                }
+                Rectangle {
+                    id: selRect
+                    color: graph.darkMode ? "#FFFFFF" : "#000000"
+                    opacity: 0.3
+                    border.color: graph.darkMode ? "#FFFFFF" : "#000000"
+                    border.width: 1
+                    visible: false
                 }
             }
         }

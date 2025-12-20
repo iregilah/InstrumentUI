@@ -1160,6 +1160,9 @@ impl graph_object_qobject::GraphObject {
                         if px > this.x_max {
                             this.x_max = px;
                         }
+                        if px < this.x_min {
+                            this.x_min = px;
+                        }
                     }
                     // Mode 1: scroll (keep last buffer_size points)
                     1 => {
@@ -2236,6 +2239,25 @@ impl graph_object_qobject::GraphObject {
                         pinned_painter.as_mut().fill_rect(&rect, &s.color);
                     }
                 }
+            }
+        }
+        if this.separate_series && this.series_list.len() > 1 {
+            let n = this.series_list.len();
+            let band_height = plot_height / (n as f64);
+            let mut sep_pen = QPen::default();
+            sep_pen.set_color(&grid_color);
+            sep_pen.set_width(0);
+            sep_pen.set_style(PenStyle::DashLine);
+            pinned_painter.as_mut().set_pen(&sep_pen);
+            for j in 1..n {
+                let y_line = plot_y + band_height * (j as f64);
+                draw_line(
+                    &mut pinned_painter,
+                    plot_x,
+                    y_line,
+                    plot_x + plot_width,
+                    y_line,
+                );
             }
         }
         // Draw legend if visible
