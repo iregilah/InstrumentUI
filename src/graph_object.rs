@@ -10,6 +10,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
+use rustfft::FftPlanner;
+use rustfft::num_complex::Complex;
 #[cxx_qt::bridge]
 pub mod graph_object_qobject {
     unsafe extern "C++" {
@@ -54,6 +56,7 @@ pub mod graph_object_qobject {
         #[qproperty(bool, y_log_scale, cxx_name = "yLogScale")]
         #[qproperty(i32, x_divisions, cxx_name = "xDivisions")]
         #[qproperty(i32, y_divisions, cxx_name = "yDivisions")]
+        #[qproperty(bool, bode_mode, cxx_name = "bodeMode")]
         type GraphObject = super::GraphObjectRust;
     }
     impl cxx_qt::Threading for GraphObject {}
@@ -232,6 +235,7 @@ pub struct GraphObjectRust {
     // oscilloscope-like grid divisions
     x_divisions: i32,
     y_divisions: i32,
+    bode_mode: bool,
 
     // units for SI formatting (optional, empty for generic graphs)
     x_unit: QString,
@@ -273,6 +277,7 @@ impl Default for GraphObjectRust {
             y_divisions: 8,
             x_unit: QString::from(""),
             y_unit: QString::from(""),
+            bode_mode: false,
 
             live_channel: 1,
             live_period_ms: 200,
@@ -1637,6 +1642,10 @@ impl graph_object_qobject::GraphObject {
                 return;
             }
         };
+        if self.as_ref().rust().bode_mode {
+            self.as_mut().apply_waveform_bode(chan, wf);
+            return;
+        }
         let mode = { self.as_ref().rust().mode };
         if mode == 2 {
             // Triggered mode: replace capture directly
@@ -1807,6 +1816,150 @@ impl graph_object_qobject::GraphObject {
         self.update();
     }
 
+    fn apply_waveform_bode(
+        mut self: Pin<&mut Self>,
+        chan: u8,
+        wf: oscillo_data_provider::Waveform,
+    ) {
+        let mut this = self.as_mut().rust_mut();
+        // Clear existing series and configure axes for Bode plot
+        this.series_list.clear();
+        this.x_label = QString::from("Frequency");
+        this.y_label = QString::from("");
+        this.x_unit = QString::from("Hz");
+        this.y_unit = QString::from("");
+        this.separate_series = true;
+        // Compute FFT of waveform data (magnitude and phase)
+        let n = wf.y.len();
+        if n < 2 {
+            return;
+        }
+        // Apply Hann window to reduce spectral leakage
+        let mut windowed: Vec<f64> =
+            wf.y.iter()
+                .enumerate()
+                .map(|(i, &val)| {
+                    let w = 0.5
+                        * (1.0 - (2.0 * std::f64::consts::PI * i as f64 / (n - 1) as f64).cos());
+                    val * w
+                })
+                .collect();
+        // Perform FFT on windowed data
+        let mut planner = FftPlanner::<f64>::new();
+        let fft = planner.plan_fft_forward(n);
+        let mut buffer: Vec<Complex<f64>> = windowed
+            .into_iter()
+            .map(|v| Complex { re: v, im: 0.0 })
+            .collect();
+        fft.process(&mut buffer);
+        // Prepare frequency axis values (skip DC = 0 Hz)
+        let dt = if wf.x.len() > 1 {
+            wf.x[1] - wf.x[0]
+        } else {
+            1.0
+        };
+        let fs = if dt > 0.0 { 1.0 / dt } else { 0.0 };
+        let half = n / 2;
+        let out_len = half + 1;
+        let include_nyquist = n % 2 == 0;
+        let mut freq_vals = Vec::with_capacity(out_len - 1);
+        let mut mag_vals = Vec::with_capacity(out_len - 1);
+        let mut phase_vals = Vec::with_capacity(out_len - 1);
+        for i in 1..out_len {
+            let val = buffer[i];
+            // One-sided magnitude (normalize FFT, double non-DC/non-Nyquist)
+            let mag = if include_nyquist && i == half {
+                (val.re * val.re + val.im * val.im).sqrt() / n as f64
+            } else {
+                (val.re * val.re + val.im * val.im).sqrt() * 2.0 / n as f64
+            };
+            let phase = val.im.atan2(val.re) * 180.0 / std::f64::consts::PI;
+            freq_vals.push(i as f64 * fs / n as f64);
+            mag_vals.push(mag);
+            phase_vals.push(phase);
+        }
+        // Auto-range frequency axis
+        let fmin = freq_vals.first().copied().unwrap_or(0.0);
+        let fmax = freq_vals.last().copied().unwrap_or(fmin);
+        if this.x_auto_range {
+            this.x_min = fmin;
+            this.x_max = fmax;
+            self.as_mut().set_x_min(fmin);
+            self.as_mut().set_x_max(fmax);
+        }
+        if this.y_auto_range {
+            this.y_min = 0.0;
+            this.y_max = 1.0;
+            self.as_mut().set_y_min(0.0);
+            self.as_mut().set_y_max(1.0);
+        }
+        // Create magnitude series (in Volts)
+        let series_name_mag = format!("C{} Mag (V)", chan);
+        let color_mag = match chan {
+            1 => QColor::from_rgb(255, 255, 0),
+            2 => QColor::from_rgb(0, 255, 255),
+            3 => QColor::from_rgb(255, 0, 255),
+            4 => QColor::from_rgb(0, 255, 0),
+            _ => QColor::from_rgb(255, 255, 255),
+        };
+        this.series_list.push(DataSeries {
+            name: series_name_mag,
+            is_digital: false,
+            color: color_mag,
+            thickness: 2.0,
+            line_style: 1,
+            marker: false,
+            data_x: freq_vals.clone(),
+            data_y: mag_vals,
+            min_y: 0.0,
+            max_y: 0.0,
+        });
+        // Compute min/max for magnitude series
+        if let Some(s) = this.series_list.last_mut() {
+            if s.data_y.is_empty() {
+                s.min_y = 0.0;
+                s.max_y = 1.0;
+            } else {
+                let (minv, maxv) = s
+                    .data_y
+                    .iter()
+                    .fold((f64::INFINITY, f64::NEG_INFINITY), |(minv, maxv), &v| {
+                        (v.min(minv), v.max(maxv))
+                    });
+                if !minv.is_finite() || !maxv.is_finite() {
+                    s.min_y = 0.0;
+                    s.max_y = 1.0;
+                } else if (maxv - minv).abs() < f64::EPSILON {
+                    s.min_y = minv - 0.5;
+                    s.max_y = maxv + 0.5;
+                } else {
+                    s.min_y = minv;
+                    s.max_y = maxv;
+                }
+            }
+        }
+        // Create phase series (in degrees)
+        let series_name_phase = format!("C{} Phase (deg)", chan);
+        let phase_color = if this.dark_mode {
+            QColor::from_rgb(255, 255, 255)
+        } else {
+            QColor::from_rgb(0, 0, 0)
+        };
+        this.series_list.push(DataSeries {
+            name: series_name_phase,
+            is_digital: false,
+            color: phase_color,
+            thickness: 2.0,
+            line_style: 2, // dashed line style
+            marker: false,
+            data_x: freq_vals,
+            data_y: phase_vals,
+            min_y: -180.0,
+            max_y: 180.0,
+        });
+        // Trigger repaint
+        self.update();
+    }
     pub fn start_live(mut self: Pin<&mut Self>, channel: i32, period_ms: i32) {
         self.as_mut().stop_live();
         let chan: u8 = channel.clamp(1, 4) as u8;
@@ -1862,7 +2015,16 @@ impl graph_object_qobject::GraphObject {
         };
 
         let chan = { self.as_ref().rust().live_channel };
-
+        if self.as_ref().rust().bode_mode {
+            self.as_mut().apply_waveform_bode(chan, wf);
+            {
+                let mut this = self.as_mut().rust_mut();
+                if !this.initial_x_set && !this.series_list.is_empty() {
+                    this.initial_x_set = true;
+                }
+            }
+            return;
+        }
         if mode == 2 {
             self.as_mut().apply_waveform(chan, wf);
             {

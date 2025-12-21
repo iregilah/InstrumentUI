@@ -136,6 +136,33 @@ ApplicationWindow {
                 text: qsTr("Refresh")
                 onClicked: graph.loadOscilloscopeData(window.scopeChannel)
             }
+            CheckBox {
+                id: bodeChk
+                text: qsTr("Bode")
+                onToggled: {
+                    graph.bodeMode = checked
+                    if (checked) {
+                        // Switch to Bode plot mode
+                        separateChk.checked = true
+                        separateChk.enabled = false
+                        modeCombo.enabled = false
+                        if (!window.live) {
+                            graph.loadOscilloscopeData(window.scopeChannel)
+                        }
+                    } else {
+                        // Return to time-domain mode
+                        separateChk.enabled = true
+                        modeCombo.enabled = true
+                        separateChk.checked = false
+                        var chanName = "C" + window.scopeChannel
+                        graph.removeSeries(chanName + " Mag (V)")
+                        graph.removeSeries(chanName + " Phase (deg)")
+                        if (!window.live) {
+                            graph.loadOscilloscopeData(window.scopeChannel)
+                        }
+                    }
+                }
+            }
 
         }
 
