@@ -5,13 +5,13 @@ use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::{
     PenStyle, QColor, QLineF, QPainterRenderHint, QPen, QPoint, QRectF, QSizeF, QString,
 };
+use rustfft::FftPlanner;
+use rustfft::num_complex::Complex;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
-use rustfft::FftPlanner;
-use rustfft::num_complex::Complex;
 #[cxx_qt::bridge]
 pub mod graph_object_qobject {
     unsafe extern "C++" {
@@ -1821,21 +1821,13 @@ impl graph_object_qobject::GraphObject {
         chan: u8,
         wf: oscillo_data_provider::Waveform,
     ) {
-        let mut this = self.as_mut().rust_mut();
-        // Clear existing series and configure axes for Bode plot
-        this.series_list.clear();
-        this.x_label = QString::from("Frequency");
-        this.y_label = QString::from("");
-        this.x_unit = QString::from("Hz");
-        this.y_unit = QString::from("");
-        this.separate_series = true;
-        // Compute FFT of waveform data (magnitude and phase)
+        // Compute FFT of waveform data (magnitude and phase) first (no mutable borrows of self)
         let n = wf.y.len();
         if n < 2 {
             return;
         }
         // Apply Hann window to reduce spectral leakage
-        let mut windowed: Vec<f64> =
+        let windowed: Vec<f64> =
             wf.y.iter()
                 .enumerate()
                 .map(|(i, &val)| {
@@ -1858,7 +1850,11 @@ impl graph_object_qobject::GraphObject {
         } else {
             1.0
         };
-        let fs = if dt > 0.0 { 1.0 / dt } else { 0.0 };
+        let fs = if dt.is_finite() && dt > 0.0 {
+            1.0 / dt
+        } else {
+            0.0
+        };
         let half = n / 2;
         let out_len = half + 1;
         let include_nyquist = n % 2 == 0;
@@ -1874,90 +1870,123 @@ impl graph_object_qobject::GraphObject {
                 (val.re * val.re + val.im * val.im).sqrt() * 2.0 / n as f64
             };
             let phase = val.im.atan2(val.re) * 180.0 / std::f64::consts::PI;
-            freq_vals.push(i as f64 * fs / n as f64);
-            mag_vals.push(mag);
-            phase_vals.push(phase);
+            let f = i as f64 * fs / n as f64;
+            if f.is_finite() && f > 0.0 {
+                freq_vals.push(f);
+                mag_vals.push(mag);
+                phase_vals.push(phase);
+            }
         }
+        if freq_vals.is_empty() {
+            return;
+        }
+
         // Auto-range frequency axis
         let fmin = freq_vals.first().copied().unwrap_or(0.0);
         let fmax = freq_vals.last().copied().unwrap_or(fmin);
-        if this.x_auto_range {
-            this.x_min = fmin;
-            this.x_max = fmax;
-            self.as_mut().set_x_min(fmin);
-            self.as_mut().set_x_max(fmax);
-        }
-        if this.y_auto_range {
-            this.y_min = 0.0;
-            this.y_max = 1.0;
-            self.as_mut().set_y_min(0.0);
-            self.as_mut().set_y_max(1.0);
-        }
-        // Create magnitude series (in Volts)
-        let series_name_mag = format!("C{} Mag (V)", chan);
-        let color_mag = match chan {
-            1 => QColor::from_rgb(255, 255, 0),
-            2 => QColor::from_rgb(0, 255, 255),
-            3 => QColor::from_rgb(255, 0, 255),
-            4 => QColor::from_rgb(0, 255, 0),
-            _ => QColor::from_rgb(255, 255, 255),
-        };
-        this.series_list.push(DataSeries {
-            name: series_name_mag,
-            is_digital: false,
-            color: color_mag,
-            thickness: 2.0,
-            line_style: 1,
-            marker: false,
-            data_x: freq_vals.clone(),
-            data_y: mag_vals,
-            min_y: 0.0,
-            max_y: 0.0,
-        });
-        // Compute min/max for magnitude series
-        if let Some(s) = this.series_list.last_mut() {
-            if s.data_y.is_empty() {
-                s.min_y = 0.0;
-                s.max_y = 1.0;
-            } else {
-                let (minv, maxv) = s
-                    .data_y
-                    .iter()
-                    .fold((f64::INFINITY, f64::NEG_INFINITY), |(minv, maxv), &v| {
-                        (v.min(minv), v.max(maxv))
-                    });
-                if !minv.is_finite() || !maxv.is_finite() {
-                    s.min_y = 0.0;
-                    s.max_y = 1.0;
-                } else if (maxv - minv).abs() < f64::EPSILON {
-                    s.min_y = minv - 0.5;
-                    s.max_y = maxv + 0.5;
-                } else {
-                    s.min_y = minv;
-                    s.max_y = maxv;
+
+        // Per-series min/max (precomputed to avoid mutating after push)
+        let (mag_min, mag_max) = if mag_vals.is_empty() {
+            (0.0, 1.0)
+        } else {
+            let mut mn = f64::INFINITY;
+            let mut mx = f64::NEG_INFINITY;
+            for &v in &mag_vals {
+                if v.is_finite() {
+                    if v < mn {
+                        mn = v;
+                    }
+                    if v > mx {
+                        mx = v;
+                    }
                 }
             }
-        }
-        // Create phase series (in degrees)
-        let series_name_phase = format!("C{} Phase (deg)", chan);
-        let phase_color = if this.dark_mode {
-            QColor::from_rgb(255, 255, 255)
-        } else {
-            QColor::from_rgb(0, 0, 0)
+            if !mn.is_finite() || !mx.is_finite() {
+                (0.0, 1.0)
+            } else if (mx - mn).abs() < f64::EPSILON {
+                (mn - 0.5, mx + 0.5)
+            } else {
+                (mn, mx)
+            }
         };
-        this.series_list.push(DataSeries {
-            name: series_name_phase,
-            is_digital: false,
-            color: phase_color,
-            thickness: 2.0,
-            line_style: 2, // dashed line style
-            marker: false,
-            data_x: freq_vals,
-            data_y: phase_vals,
-            min_y: -180.0,
-            max_y: 180.0,
-        });
-        // Trigger repaint
+
+        let mut x_range_update: Option<(f64, f64)> = None;
+        let mut y_range_update: Option<(f64, f64)> = None;
+
+        {
+            let mut this = self.as_mut().rust_mut();
+
+            // Clear existing series and configure axes for Bode plot
+            this.series_list.clear();
+            this.x_label = QString::from("Frequency");
+            this.y_label = QString::from("");
+            this.x_unit = QString::from("Hz");
+            this.y_unit = QString::from("");
+            this.separate_series = true;
+
+            if this.x_auto_range {
+                this.x_min = fmin;
+                this.x_max = fmax;
+                x_range_update = Some((fmin, fmax));
+            }
+            if this.y_auto_range {
+                // Not used in separate-series rendering, but keep sane defaults
+                this.y_min = 0.0;
+                this.y_max = 1.0;
+                y_range_update = Some((0.0, 1.0));
+            }
+
+            // Create magnitude series (in Volts)
+            let series_name_mag = format!("C{} Mag (V)", chan);
+            let color_mag = match chan {
+                1 => QColor::from_rgb(255, 255, 0),
+                2 => QColor::from_rgb(0, 255, 255),
+                3 => QColor::from_rgb(255, 0, 255),
+                4 => QColor::from_rgb(0, 255, 0),
+                _ => QColor::from_rgb(255, 255, 255),
+            };
+            this.series_list.push(DataSeries {
+                name: series_name_mag,
+                is_digital: false,
+                color: color_mag,
+                thickness: 2.0,
+                line_style: 1,
+                marker: false,
+                data_x: freq_vals.clone(),
+                data_y: mag_vals,
+                min_y: mag_min,
+                max_y: mag_max,
+            });
+
+            // Create phase series (in degrees)
+            let series_name_phase = format!("C{} Phase (deg)", chan);
+            let phase_color = if this.dark_mode {
+                QColor::from_rgb(255, 255, 255)
+            } else {
+                QColor::from_rgb(0, 0, 0)
+            };
+            this.series_list.push(DataSeries {
+                name: series_name_phase,
+                is_digital: false,
+                color: phase_color,
+                thickness: 2.0,
+                line_style: 2, // dashed line style
+                marker: false,
+                data_x: freq_vals,
+                data_y: phase_vals,
+                min_y: -180.0,
+                max_y: 180.0,
+            });
+        }
+
+        if let Some((xmin, xmax)) = x_range_update {
+            self.as_mut().set_x_min(xmin);
+            self.as_mut().set_x_max(xmax);
+        }
+        if let Some((ymin, ymax)) = y_range_update {
+            self.as_mut().set_y_min(ymin);
+            self.as_mut().set_y_max(ymax);
+        }
         self.update();
     }
     pub fn start_live(mut self: Pin<&mut Self>, channel: i32, period_ms: i32) {
